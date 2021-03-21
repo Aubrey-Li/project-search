@@ -50,6 +50,8 @@ class Index(val inputFile: String) {
     val idToParsedWords = new HashMap[Int, List[String]]
     for (page <- rootNode \ "page") {
       val id: Int = (page \\ "id").asInstanceOf[Int]
+      val title: String = (page \\ "title").text
+      idsToTitle(id) = title
       // get concatenation of all text in the page
       val pageString: String = page.text
       // remove punctuation and whitespace, matching all words including pipe links and meta pages
