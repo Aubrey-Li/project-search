@@ -4,11 +4,12 @@ import scala.xml.Node
 
 object NodeSample {
 
-  val otherNode: Node = xml.XML.loadFile("src\\search\\src\\SmallWiki.xml")
+  val otherNode: Node = xml.XML.loadFile("src/search/src/SmallWiki.xml")
 
   val mainNode =
     <xml>
       <page>
+        <title>MyTitle</title>
         <id>0</id>
         <body>
           This is the body text!
@@ -24,10 +25,13 @@ object NodeSample {
     val page = (mainNode \ "page").text
     println(page)
 
+    val page2 = (otherNode \ "page").text
+    println(page2)
+
     val page0Body = ((mainNode \ "page") \ "body").text
     val page0AltBody = (mainNode \\ "body").text
-    println(page0Body)
-    println(page0AltBody)
+//    println(page0Body)
+//    println(page0AltBody)
   }
 
 }
