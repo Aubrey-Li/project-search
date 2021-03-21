@@ -22,11 +22,17 @@ class Index(val inputFile: String) {
   // docs.txt Map document id to the page rank for that document
   private val idsToPageRank = new HashMap[Int, Double]
 
+  private val titlesToLinks = new HashMap[String, Array[String]]
+
   // Maps each word to a map of document IDs and frequencies of documents that
   // contain that word --> querier calculates tf and idf
   //  private val wordsToDocumentFrequencies = new HashMap[String, HashMap[Int, Double]]
 
   val regex = new Regex("""\[\[[^\[]+?\]\]|[^\W_]+'[^\W_]+|[^\W_]+""")
+  //--> this will return only the content within the [[ ]] i.e. "This is a [[hammer]]" will only return "hammer"
+  // [[presidents|washington]] will return "presidents|washington"
+  val regexLinks = new Regex("""(?<=\[\[).+?(?=\])""")
+
 
   // 1. parsing + tokenizing
   // for page in (rootNode \ "page")
@@ -61,6 +67,19 @@ class Index(val inputFile: String) {
       // convert to list (each element is a word of the page)
       val matchesList = matchesIterator.toList.map { aMatch => aMatch.matched }
       idToParsedWords(id) = matchesList
+
+      //populate titlesToLinks --> prep for PageRank
+      val matchesLinksIterator = regexLinks.findAllMatchIn(pageString)
+      var matchesLinksList = matchesLinksIterator.toArray.map { aMatch => aMatch.matched }
+      // handling pipe & meta-links: "hammer", "presidents|washington", "category: computer science"
+      for (link <- matchesLinksList) {
+        if (link.contains("|")) {
+          val temps = link.split('|').map(_.trim)
+          //only keep "presidents" as a link
+          matchesLinksList = matchesLinksList.updated(matchesLinksList.indexOf(link), temps(0))
+        }
+      }
+      titlesToLinks(title) = matchesLinksList
     }
     idToParsedWords
   }
@@ -100,7 +119,7 @@ class Index(val inputFile: String) {
 
 }
 
-class PageRank(titleToLinks: HashMap[String, Array[String]], idToTitles: HashMap[Int, String]) {
+class PageRank(titleToLinks: HashMap[String, List[String]], idToTitles: HashMap[Int, String]) {
 
   val totalPageNum: Int = titleToLinks.size
   val allPages: Array[String] = new Array[String](idToTitles.size)
