@@ -1,14 +1,16 @@
 package search.sol
 
+import search.src.{PorterStemmer, StopWords}
+
 import scala.collection.mutable.HashMap
 import scala.util.matching.Regex
 import scala.xml.Node
 
 /**
-  * Provides an XML indexer, produces files for a querier
-  *
-  * @param inputFile - the filename of the XML wiki to be indexed
-  */
+ * Provides an XML indexer, produces files for a querier
+ *
+ * @param inputFile - the filename of the XML wiki to be indexed
+ */
 class Index(val inputFile: String) {
   // titles.txt Maps the document ids to the title for each document
   private val idsToTitle = new HashMap[Int, String]
@@ -22,7 +24,10 @@ class Index(val inputFile: String) {
   // docs.txt Map document id to the page rank for that document
   private val idsToPageRank = new HashMap[Int, Double]
 
+  // why need this? Shouldn't we have ids to Links? For pagerank calculation? (link helpers populate it)
   private val titlesToLinks = new HashMap[String, Set[String]]
+  // page ids to Set of link ids
+  private val idToLinks = new HashMap[Int, Set[Int]]
 
   // Maps each word to a map of document IDs and frequencies of documents that
   // contain that word --> querier calculates tf and idf
@@ -30,96 +35,140 @@ class Index(val inputFile: String) {
 
   val regex = new Regex("""\[\[[^\[]+?\]\]|[^\W_]+'[^\W_]+|[^\W_]+""")
 
-
   //--> this will return only the content within the [[ ]] i.e. "This is a [[hammer]]" will only return "hammer"
   // [[presidents|washington]] will return "presidents|washington"
   val regexLinks = new Regex("""(?<=\[\[).+?(?=\])""")
 
-
-  // 1. parsing + tokenizing
-  // for page in (rootNode \ "page")
-  //    (page \\ "id")
-  //    (page \\ "title")
-  // -> (rootNode \ "page").text gives us concatenated string of all content of a page
-  // for pageString in (rootNode \ "page").text
-  //    val matchesIterator = regex.findAllMatchesIn(pageString)
-  //    val matchesList = matchesIterator.toList.map{ aMatch => aMatch.matched }
-  // -> using regex we get a list of all words of a page (each element is a word or link)
-
-  /**
-    * A function that parse the document and creates a HashMap with its id as key and the list of words in the corpus
-    * as the value
-    *
-    * @return hashmap of page id to List of words in that page (with punctuation, whitespace removed)
-    *         and links, pipe links, and metapages parsed to remove square brackets
-    */
-  def parsing(): HashMap[Int, List[String]] = {
-    val rootNode: Node = xml.XML.loadFile("smallWiki.xml")
-    val idToParsedWords = new HashMap[Int, List[String]]
-    for (page <- rootNode \ "page") {
-      val id: Int = (page \\ "id").asInstanceOf[Int]
-      val title: String = (page \\ "title").text
-      idsToTitle(id) = title
-      // get concatenation of all text in the page
-      val pageString: String = page.text
-      // remove punctuation and whitespace, matching all words including pipe links and meta pages
-      // TODO:--> figure out how to handle links, pipe links and meta pages separately (removing square brackets)
-      // TODO: remove ids?
-      val matchesIterator = regex.findAllMatchIn(pageString)
-      // convert to list (each element is a word of the page)
-      val matchesList = matchesIterator.toList.map { aMatch => aMatch.matched }
-      //TODO: REMOVE STOPWORDS, STEMMING BEFORE STORING IN idToParseWords
-      idToParsedWords(id) = matchesList
-
-      //populate titlesToLinks --> prep for PageRank
-      val matchesLinksIterator = regexLinks.findAllMatchIn(pageString)
-      var matchesLinksList = matchesLinksIterator.toArray.map { aMatch => aMatch.matched }
-      // handling pipe & meta-links: "hammer", "presidents|washington", "category: computer science"
-      for (link <- matchesLinksList) {
-        if (link.contains("|")) {
-          val temps = link.split('|').map(_.trim)
-          //TODO: add "washington" to idToParseWords
-          //only keep "presidents" as a link
-          matchesLinksList = matchesLinksList.updated(matchesLinksList.indexOf(link), temps(0))
-        }
-      }
-      titlesToLinks(title) = matchesLinksList.toSet
-    }
-    idToParsedWords
-  }
-
-  // handle special cases: id, pipelink, meta-page link, title
-  // --> record special cases to add to hashmaps
-  // --> should we remove id from our final list of terms?
-
-  // 3. removing stop words
-  // iterate over list and if isStopWord(element) == true, then remove element
-  // input: list of words of a page
-  // output: that same list without stop words
-  //  def
-
-  // 4. stemming
-  // iterate over list and call stem() on each element --> mutable list so changing it
-  // --> hurrah now we've got a list of terms for a page
-
-  // 5. populate hashmaps
-
-  // idsToTitle
-  // for each page, extract title and id. Add to map
-  // don't stem, don't remove stop words
+  val regexLink = new Regex("""\[\[[^\[]+?\]\]""")
+  val regexMetaPage = new Regex("""\[\[[^\[]+?\:[^\[]+?\]\]""")
+  val regexPipeLink = new Regex("""\[\[[^\[]+?\|[^\[]+?\]\]""")
 
   // termsToIdFreq
   // for each term in a page, we count its frequency
   // add term + id + frequency to map
+  /**
+   * A helper function that populates the termsToIdFreq hashMap while stemming input words and removing stop words
+   *
+   * @param word                - a word from a page in the corpus
+   * @param id                  - the id of the page this word appears in
+   * @param termsToFreqThisPage - a HashMap of stemmed terms to their frequency on this page (input id)
+   */
+  def termsToIdFreqHelper(word: String, id: Int, termsToFreqThisPage: scala.collection.mutable.HashMap[String, Int]): Unit = {
+    // if not stop word, stem
+    if (!StopWords.isStopWord(word)) {
+      val term = PorterStemmer.stem(word) // should we make this lower case? .toLowerCase
+      // if stemmed version is not a stop word
+      if (!StopWords.isStopWord(term)) {
+        // if term exists in map
+        if (termsToFreqThisPage.contains(term)) {
+          // increment frequency
+          termsToFreqThisPage(term) += 1
+        } else {
+          // add it to the map
+          termsToFreqThisPage(term) = 1
+        }
+      } else {} // if stop word, do nothing
 
-  // idsToMaxCounts
-  // for the list of terms in a page, count unique occurrences of each term
-  // then add max number to hashmap along with the id of the page it arises in
+      // if term already exists
+      if (termsToIdFreq.contains(term)) {
+        // if id of term exists (page that term appears in)
+        if (termsToIdFreq(term).contains(id)) {
+          // increment freq of term for that id
+          termsToIdFreq(term)(id) += 1
+        } else {
+          // add id for this existing term to the map
+          termsToIdFreq(term)(id) = 1
+        }
+        // if term does not exist
+      } else {
+        // create new Term to Id to Freq map
+        termsToIdFreq(term) = scala.collection.mutable.HashMap(id -> 1)
+      }
+      // if stop word, do nothing
+    } else {}
+  }
 
-  // idsToPageRank
-  // pagerank jazz
-  // map id to pagerank
+  /**
+   * A function that parse the document and creates a HashMap with its id as key and the list of words in the corpus
+   * as the value
+   *
+   * @return hashmap of page id to List of words in that page (with punctuation, whitespace removed)
+   *         and links, pipe links, and metapages parsed to remove square brackets
+   */
+  def parsing(): Unit = {
+    val rootNode: Node = xml.XML.loadFile("smallWiki.xml")
+    for (page <- rootNode \ "page") {
+      // extract id
+      val id: Int = (page \\ "id").text.trim().toInt
+      // extract title
+      val title: String = (page \\ "title").text.trim()
+      // add id & title to hashmap
+      idsToTitle(id) = title
 
+      // get concatenation of all text in the page
+      val pageString: String = page.text
+      // remove punctuation and whitespace, matching all words including pipe links and meta pages
+      val matchesIterator = regex.findAllMatchIn(pageString)
+      // convert to list (each element is a word of the page)
+      val matchesList = matchesIterator.toList.map { aMatch => aMatch.matched }
+
+      // hashmap to store terms to their frequency on this page (intermediate step for termsToIdFreq)
+      val termsToFreqThisPage = new scala.collection.mutable.HashMap[String, Int]
+
+      // for all words on this page
+      for (word <- matchesList) {
+        // * populate titlesToLinks
+
+        // if our word is a link
+        if (regexLink.matches(word)) {
+
+          // pipe link
+          if (regexPipeLink.matches(word)) {
+            // extract word(s) to process (omit underlying link)
+            val wordArray: Array[String] = pipeLinkHelper(word, id)
+            // pass word(s) to termsToIdFreq helper
+            for (linkWord <- wordArray) {
+              // populate termsToIdFreq map (to be stemmed and stopped)
+              termsToIdFreqHelper(linkWord, id, termsToFreqThisPage)
+            }
+          }
+          // metapage link
+          else if (regexMetaPage.matches(word)) {
+            val wordArray: Array[String] = metaLinkHelper(word, id)
+            // pass word(s) to termsToIdFreq helper
+            for (linkWord <- wordArray) {
+              // populate termsToIdFreq map (to be stemmed and stopped)
+              termsToIdFreqHelper(linkWord, id, termsToFreqThisPage)
+            }
+          }
+          // normal link
+          else {
+            val wordArray: Array[String] = linkHelper(word, id)
+            // pass word(s) to termsToIdFreq helper
+            for (linkWord <- wordArray) {
+              // populate termsToIdFreq map (to be stemmed and stopped)
+              termsToIdFreqHelper(linkWord, id, termsToFreqThisPage)
+            }
+          }
+        }
+        // our word is not a link
+        else {
+          // populate termsToIdFreq map (to be stemmed and stopped)
+          termsToIdFreqHelper(word, id, termsToFreqThisPage)
+        }
+
+        // * populate idsToMaxCounts map (add this page)
+        // if not empty
+        if (!termsToFreqThisPage.isEmpty) {
+          // get max count for this page
+          idsToMaxCounts(id) = termsToFreqThisPage.valuesIterator.max
+        } else {
+          // empty map, so max count is 0
+          idsToMaxCounts(id) = 0
+        }
+      }
+    }
+  }
 
   val totalPageNum: Int = titlesToLinks.size
   val allPages: Array[String] = new Array[String](idsToTitle.size)
@@ -169,7 +218,7 @@ class Index(val inputFile: String) {
     Math.sqrt(differenceSum)
   }
 
-  def pageRank() : HashMap[Int, Double] = {
+  def pageRank(): HashMap[Int, Double] = {
     var previous: Array[Double] = Array.fill[Double](totalPageNum)(0)
     var current: Array[Double] = Array.fill[Double](totalPageNum)(1 / totalPageNum)
     while (distance(previous, current) > 0.0001) {
