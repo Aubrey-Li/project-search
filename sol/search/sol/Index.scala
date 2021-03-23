@@ -5,10 +5,10 @@ import scala.util.matching.Regex
 import scala.xml.Node
 
 /**
- * Provides an XML indexer, produces files for a querier
- *
- * @param inputFile - the filename of the XML wiki to be indexed
- */
+  * Provides an XML indexer, produces files for a querier
+  *
+  * @param inputFile - the filename of the XML wiki to be indexed
+  */
 class Index(val inputFile: String) {
   // titles.txt Maps the document ids to the title for each document
   private val idsToTitle = new HashMap[Int, String]
@@ -22,13 +22,15 @@ class Index(val inputFile: String) {
   // docs.txt Map document id to the page rank for that document
   private val idsToPageRank = new HashMap[Int, Double]
 
-  private val titlesToLinks = new HashMap[String, Array[String]]
+  private val titlesToLinks = new HashMap[String, Set[String]]
 
   // Maps each word to a map of document IDs and frequencies of documents that
   // contain that word --> querier calculates tf and idf
   //  private val wordsToDocumentFrequencies = new HashMap[String, HashMap[Int, Double]]
 
   val regex = new Regex("""\[\[[^\[]+?\]\]|[^\W_]+'[^\W_]+|[^\W_]+""")
+
+
   //--> this will return only the content within the [[ ]] i.e. "This is a [[hammer]]" will only return "hammer"
   // [[presidents|washington]] will return "presidents|washington"
   val regexLinks = new Regex("""(?<=\[\[).+?(?=\])""")
@@ -45,12 +47,12 @@ class Index(val inputFile: String) {
   // -> using regex we get a list of all words of a page (each element is a word or link)
 
   /**
-   * A function that parse the document and creates a HashMap with its id as key and the list of words in the corpus
-   * as the value
-   *
-   * @return hashmap of page id to List of words in that page (with punctuation, whitespace removed)
-   *         and links, pipe links, and metapages parsed to remove square brackets
-   */
+    * A function that parse the document and creates a HashMap with its id as key and the list of words in the corpus
+    * as the value
+    *
+    * @return hashmap of page id to List of words in that page (with punctuation, whitespace removed)
+    *         and links, pipe links, and metapages parsed to remove square brackets
+    */
   def parsing(): HashMap[Int, List[String]] = {
     val rootNode: Node = xml.XML.loadFile("smallWiki.xml")
     val idToParsedWords = new HashMap[Int, List[String]]
@@ -66,6 +68,7 @@ class Index(val inputFile: String) {
       val matchesIterator = regex.findAllMatchIn(pageString)
       // convert to list (each element is a word of the page)
       val matchesList = matchesIterator.toList.map { aMatch => aMatch.matched }
+      //TODO: REMOVE STOPWORDS, STEMMING BEFORE STORING IN idToParseWords
       idToParsedWords(id) = matchesList
 
       //populate titlesToLinks --> prep for PageRank
@@ -75,11 +78,12 @@ class Index(val inputFile: String) {
       for (link <- matchesLinksList) {
         if (link.contains("|")) {
           val temps = link.split('|').map(_.trim)
+          //TODO: add "washington" to idToParseWords
           //only keep "presidents" as a link
           matchesLinksList = matchesLinksList.updated(matchesLinksList.indexOf(link), temps(0))
         }
       }
-      titlesToLinks(title) = matchesLinksList
+      titlesToLinks(title) = matchesLinksList.toSet
     }
     idToParsedWords
   }
@@ -117,13 +121,9 @@ class Index(val inputFile: String) {
   // map id to pagerank
 
 
-}
-
-class PageRank(titleToLinks: HashMap[String, List[String]], idToTitles: HashMap[Int, String]) {
-
-  val totalPageNum: Int = titleToLinks.size
-  val allPages: Array[String] = new Array[String](idToTitles.size)
-  for (value <- idToTitles.values) {
+  val totalPageNum: Int = titlesToLinks.size
+  val allPages: Array[String] = new Array[String](idsToTitle.size)
+  for (value <- idsToTitle.values) {
     allPages :+ value
   }
 
@@ -132,19 +132,18 @@ class PageRank(titleToLinks: HashMap[String, List[String]], idToTitles: HashMap[
     var weight: Double = 0.0
     //initialize empty outer hashmap
     val outerHashMap = new HashMap[String, HashMap[String, Double]]()
-    for ((j, links) <- titleToLinks) {
-      val totalLinks: Int = titleToLinks(j).length
+    for ((j, links) <- titlesToLinks) {
+      val totalLinks: Int = titlesToLinks(j).size
       //initiating new inner hashMap
       val innerHashMap = new HashMap[String, Double]()
       for (k <- links) {
-        titleToLinks(j) = titleToLinks(j).distinct //remove duplicates (ignore multiple links from one page to another
         if (totalLinks == 0) { //if the page doesn't link to anything-->link once to everywhere except itself
           weight = epsilon / totalPageNum + (1 - epsilon) / (totalPageNum - 1)
         }
-        if (titleToLinks(k).contains(j) && !j.equals(k)) {
+        if (titlesToLinks(k).contains(j) && !j.equals(k)) {
           weight = epsilon / totalPageNum + (1 - epsilon) / totalLinks
         }
-        if (j.equals(k) | !allPages.contains(k)) { //links from a page to itself | link to pages outside corpus -> ignored
+        if (j.equals(k) || !allPages.contains(k)) { //links from a page to itself | link to pages outside corpus -> ignored
           weight = 0.0
         }
         else {
@@ -157,6 +156,10 @@ class PageRank(titleToLinks: HashMap[String, List[String]], idToTitles: HashMap[
     outerHashMap
   }
 
+  val weightDistribution: HashMap[String, HashMap[String, Double]] = weightMatrix()
+
+  //idsToLinks: HashMap[id: Int, links : Array[Int]]
+
   def distance(previous: Array[Double], current: Array[Double]): Double = {
     // euclidean distance = sqrt of (sum of all (differences)^2)
     var differenceSum: Double = 0.0
@@ -165,11 +168,28 @@ class PageRank(titleToLinks: HashMap[String, List[String]], idToTitles: HashMap[
     }
     Math.sqrt(differenceSum)
   }
+
+  def pageRank() : HashMap[Int, Double] = {
+    var previous: Array[Double] = Array.fill[Double](totalPageNum)(0)
+    var current: Array[Double] = Array.fill[Double](totalPageNum)(1 / totalPageNum)
+    while (distance(previous, current) > 0.0001) {
+      previous = current
+      for (j <- 0 until totalPageNum) {
+        current(j) = 0.0
+        for (k <- 0 until totalPageNum) {
+          current(j) = current(j) + weightDistribution(idsToTitle(j))(idsToTitle(k)) * previous(k)
+        }
+        idsToPageRank(j) = current(j)
+      }
+    }
+    idsToPageRank
+  }
+
 }
 
-  object Index {
-    def main(args: Array[String]) {
-      // TODO : Implement!
-      System.out.println("Not implemented yet!")
-    }
+object Index {
+  def main(args: Array[String]) {
+    // TODO : Implement!
+    System.out.println("Not implemented yet!")
   }
+}
