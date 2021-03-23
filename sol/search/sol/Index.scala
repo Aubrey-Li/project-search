@@ -7,10 +7,10 @@ import scala.util.matching.Regex
 import scala.xml.Node
 
 /**
- * Provides an XML indexer, produces files for a querier
- *
- * @param inputFile - the filename of the XML wiki to be indexed
- */
+  * Provides an XML indexer, produces files for a querier
+  *
+  * @param inputFile - the filename of the XML wiki to be indexed
+  */
 class Index(val inputFile: String) {
   // titles.txt Maps the document ids to the title for each document
   private val idsToTitle = new HashMap[Int, String]
@@ -33,27 +33,27 @@ class Index(val inputFile: String) {
   // contain that word --> querier calculates tf and idf
   //  private val wordsToDocumentFrequencies = new HashMap[String, HashMap[Int, Double]]
 
-  val regex = new Regex("""\[\[[^\[]+?\]\]|[^\W_]+'[^\W_]+|[^\W_]+""")
+  private val regex = new Regex("""\[\[[^\[]+?\]\]|[^\W_]+'[^\W_]+|[^\W_]+""")
 
   //--> this will return only the content within the [[ ]] i.e. "This is a [[hammer]]" will only return "hammer"
   // [[presidents|washington]] will return "presidents|washington"
-  val regexLinks = new Regex("""(?<=\[\[).+?(?=\])""")
+  //private val regexLinks = new Regex("""(?<=\[\[).+?(?=\])""")
 
-  val regexLink = new Regex("""\[\[[^\[]+?\]\]""")
-  val regexMetaPage = new Regex("""\[\[[^\[]+?\:[^\[]+?\]\]""")
-  val regexPipeLink = new Regex("""\[\[[^\[]+?\|[^\[]+?\]\]""")
+  private val regexLink = """\[\[[^\[]+?\]\]"""
+  private val regexMetaPage = """\[\[[^\[]+?\:[^\[]+?\]\]"""
+  private val regexPipeLink = """\[\[[^\[]+?\|[^\[]+?\]\]"""
 
   // termsToIdFreq
   // for each term in a page, we count its frequency
   // add term + id + frequency to map
   /**
-   * A helper function that populates the termsToIdFreq hashMap while stemming input words and removing stop words
-   *
-   * @param word                - a word from a page in the corpus
-   * @param id                  - the id of the page this word appears in
-   * @param termsToFreqThisPage - a HashMap of stemmed terms to their frequency on this page (input id)
-   */
-  def termsToIdFreqHelper(word: String, id: Int, termsToFreqThisPage: scala.collection.mutable.HashMap[String, Int]): Unit = {
+    * A helper function that populates the termsToIdFreq hashMap while stemming input words and removing stop words
+    *
+    * @param word                - a word from a page in the corpus
+    * @param id                  - the id of the page this word appears in
+    * @param termsToFreqThisPage - a HashMap of stemmed terms to their frequency on this page (input id)
+    */
+  private def termsToIdFreqHelper(word: String, id: Int, termsToFreqThisPage: scala.collection.mutable.HashMap[String, Int]): Unit = {
     // if not stop word, stem
     if (!StopWords.isStopWord(word)) {
       val term = PorterStemmer.stem(word) // should we make this lower case? .toLowerCase
@@ -89,13 +89,13 @@ class Index(val inputFile: String) {
   }
 
   /**
-   * A function that parse the document and creates a HashMap with its id as key and the list of words in the corpus
-   * as the value
-   *
-   * @return hashmap of page id to List of words in that page (with punctuation, whitespace removed)
-   *         and links, pipe links, and metapages parsed to remove square brackets
-   */
-  def parsing(): Unit = {
+    * A function that parse the document and creates a HashMap with its id as key and the list of words in the corpus
+    * as the value
+    *
+    * @return hashmap of page id to List of words in that page (with punctuation, whitespace removed)
+    *         and links, pipe links, and metapages parsed to remove square brackets
+    */
+  private def parsing(): Unit = {
     val rootNode: Node = xml.XML.loadFile("smallWiki.xml")
     for (page <- rootNode \ "page") {
       // extract id
@@ -120,10 +120,10 @@ class Index(val inputFile: String) {
         // * populate titlesToLinks
 
         // if our word is a link
-        if (regexLink.matches(word)) {
+        if (word.matches(regexLink)) {
 
           // pipe link
-          if (regexPipeLink.matches(word)) {
+          if (word.matches(regexPipeLink)) {
             // extract word(s) to process (omit underlying link)
             val wordArray: Array[String] = pipeLinkHelper(word, id)
             // pass word(s) to termsToIdFreq helper
@@ -161,7 +161,7 @@ class Index(val inputFile: String) {
 
         // * populate idsToMaxCounts map (add this page)
         // if not empty
-        if (!termsToFreqThisPage.isEmpty) {
+        if (termsToFreqThisPage.nonEmpty) {
           // get max count for this page
           idsToMaxCounts(id) = termsToFreqThisPage.valuesIterator.max
         } else {
@@ -172,13 +172,27 @@ class Index(val inputFile: String) {
     }
   }
 
-  val totalPageNum: Int = titlesToLinks.size
-  val allPages: Array[String] = new Array[String](idsToTitle.size)
+  // below are the implementation for calculating page rank
+
+  // General Steps:
+  // 1. create a weight matrix that store the w(j)(k) for all pages j and their links k
+  // The matrix take the form of a nested HashMap that maps title to a hashmap of link titles to its weight
+  // a visual representation:
+  //    A   B   C
+  // A
+  // B
+  // C
+
+  // store the total number of pages
+  private val totalPageNum: Int = titlesToLinks.size
+
+  // create an array that contains all page titles -->useful later for checking if a link exists or not
+  private val allPages: Array[String] = new Array[String](idsToTitle.size)
   for (value <- idsToTitle.values) {
     allPages :+ value
   }
 
-  def weightMatrix(): HashMap[String, HashMap[String, Double]] = {
+  private def weightMatrix(): HashMap[String, HashMap[String, Double]] = {
     val epsilon: Double = 0.15
     var weight: Double = 0.0
     //initialize empty outer hashmap
@@ -207,11 +221,11 @@ class Index(val inputFile: String) {
     outerHashMap
   }
 
-  val weightDistribution: HashMap[String, HashMap[String, Double]] = weightMatrix()
+  private val weightDistribution: HashMap[String, HashMap[String, Double]] = weightMatrix()
 
   //idsToLinks: HashMap[id: Int, links : Array[Int]]
 
-  def distance(previous: Array[Double], current: Array[Double]): Double = {
+  private def distance(previous: Array[Double], current: Array[Double]): Double = {
     // euclidean distance = sqrt of (sum of all (differences)^2)
     var differenceSum: Double = 0.0
     for (i <- 0 until previous.length - 1) {
@@ -220,7 +234,7 @@ class Index(val inputFile: String) {
     Math.sqrt(differenceSum)
   }
 
-  def pageRank(): HashMap[Int, Double] = {
+  private def pageRank(): HashMap[Int, Double] = {
     var previous: Array[Double] = Array.fill[Double](totalPageNum)(0)
     var current: Array[Double] = Array.fill[Double](totalPageNum)(1 / totalPageNum)
     while (distance(previous, current) > 0.0001) {
