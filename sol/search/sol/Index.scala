@@ -134,6 +134,7 @@ class Index(val inputFile: String) {
           }
           // metapage link
           else if (regexMetaPage.matches(word)) {
+            // extract word(s) to process (omit underlying link)
             val wordArray: Array[String] = metaLinkHelper(word, id)
             // pass word(s) to termsToIdFreq helper
             for (linkWord <- wordArray) {
@@ -143,6 +144,7 @@ class Index(val inputFile: String) {
           }
           // normal link
           else {
+            // extract word(s) to process (omit underlying link)
             val wordArray: Array[String] = linkHelper(word, id)
             // pass word(s) to termsToIdFreq helper
             for (linkWord <- wordArray) {
