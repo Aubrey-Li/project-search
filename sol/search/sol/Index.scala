@@ -2,6 +2,7 @@ package search.sol
 
 import search.src.{FileIO, PorterStemmer, StopWords}
 
+import scala.collection.mutable.HashSet
 import scala.collection.mutable.HashMap
 import scala.util.matching.Regex
 import scala.xml.Node
@@ -24,10 +25,11 @@ class Index(val inputFile: String) {
   // docs.txt Map document id to the page rank for that document
   private val idsToPageRank = new HashMap[Int, Double]
 
-  // why need this? Shouldn't we have ids to Links? For pagerank calculation? (link helpers populate it)
-  private val titlesToLinks = new HashMap[String, Set[String]]
-  // page ids to Set of link ids
-  private val idToLinks = new HashMap[Int, Set[Int]]
+  // page ids to Set of link ids (we use HashSet to avoid duplicates in links)
+  private val idToLinkIds = new HashMap[Int, HashSet[Int]]
+
+  // page title mapping to its id
+  private val titleToIds = new HashMap[String, Int]
 
   // Maps each word to a map of document IDs and frequencies of documents that
   // contain that word --> querier calculates tf and idf
@@ -37,7 +39,7 @@ class Index(val inputFile: String) {
 
   //--> this will return only the content within the [[ ]] i.e. "This is a [[hammer]]" will only return "hammer"
   // [[presidents|washington]] will return "presidents|washington"
-  //private val regexLinks = new Regex("""(?<=\[\[).+?(?=\])""")
+  //private val linkContentPattern = new Regex("""(?<=\[\[).+?(?=])""")
 
   private val regexLink = """\[\[[^\[]+?\]\]"""
   private val regexMetaPage = """\[\[[^\[]+?\:[^\[]+?\]\]"""
@@ -103,7 +105,9 @@ class Index(val inputFile: String) {
       idsToTitle(id) = title
 
       // get concatenation of all text in the page
-      val pageString: String = page.text
+      //concatenate title to body --> not include ids in pageString
+      val body: String = (page \\ "text").text.trim()
+      val pageString: String = title.concat(body)
       // remove punctuation and whitespace, matching all words including pipe links and meta pages
       val matchesIterator = regex.findAllMatchIn(pageString)
       // convert to list (each element is a word of the page)
@@ -112,48 +116,47 @@ class Index(val inputFile: String) {
       // hashmap to store terms to their frequency on this page (intermediate step for termsToIdFreq)
       val termsToFreqThisPage = new scala.collection.mutable.HashMap[String, Int]
 
+      // create a word list to store future words
+      var wordList: List[String] = List()
+
+
       // for all words on this page
       for (word <- matchesList) {
-        // * populate titlesToLinks
 
         // if our word is a link
         if (word.matches(regexLink)) {
-
-          // pipe link
+          // use regex to get rid of the [[ ]] and replace them with empty string -->please check if regex correct
+          val linkTitle: String = word.replaceAll("""/[\[\]']+/g""", "''")
+          // case 1: pipe link
           if (word.matches(regexPipeLink)) {
-            // extract word(s) to process (omit underlying link)
-            val wordArray: Array[String] = pipeLinkHelper(word, id)
-            // pass word(s) to termsToIdFreq helper
-            for (linkWord <- wordArray) {
-              // populate termsToIdFreq map (to be stemmed and stopped)
-              termsToIdFreqHelper(linkWord, id, termsToFreqThisPage)
-            }
+            //using split: Leaders|US Presidents|JFK --> Array["Leaders", "US Presidents", "JFK"]; see Piazza post @1358 to see what to keep
+            //summary: the first item in the array gets stored in idToLinkIds, not in wordlist; the second item (the one right behind the second pipe)
+            // gets stored in wordlist and not idToLinkIds; the later items are ignored
+            val linkName = linkTitle.split("\\|")(0) //e.g. "Leaders"
+            val addToWords = linkTitle.split("\\|")(1) //e.g. "US Presidents"
+            wordList += addToWords
+            // adding the id of the link to idToLinkIds
+            idToLinkIds(id) + titleToIds(linkName)
           }
-          // metapage link
-          else if (regexMetaPage.matches(word)) {
-            // extract word(s) to process (omit underlying link)
-            val wordArray: Array[String] = metaLinkHelper(word, id)
-            // pass word(s) to termsToIdFreq helper
-            for (linkWord <- wordArray) {
-              // populate termsToIdFreq map (to be stemmed and stopped)
-              termsToIdFreqHelper(linkWord, id, termsToFreqThisPage)
-            }
-          }
-          // normal link
+          // case 2: meta-page link
+          else if (word.matches(regexMetaPage)) {
+            //using regex: Category: Computer Science --> Array["Category", "Computer" ,"Science"]
+            val words = regex.findAllMatchIn(word).toList.map { aMatch => aMatch.matched } //--> "Category: Computer Science" => ["Category", "Computer" ,"Science"]
+            // merge the list with wordlist
+            wordList = wordList ++ words
+            // adding the id of the link to idToLinkIds
+            idToLinkIds(id) + titleToIds(linkTitle)
+          } //case 3: normal link
           else {
-            // extract word(s) to process (omit underlying link)
-            val wordArray: Array[String] = linkHelper(word, id)
-            // pass word(s) to termsToIdFreq helper
-            for (linkWord <- wordArray) {
-              // populate termsToIdFreq map (to be stemmed and stopped)
-              termsToIdFreqHelper(linkWord, id, termsToFreqThisPage)
-            }
+            // add the title to the wordlist
+            wordList += linkTitle
+            // adding the id of the link to idToLinkIds
+            idToLinkIds(id) + titleToIds(linkTitle)
           }
         }
         // our word is not a link
         else {
-          // populate termsToIdFreq map (to be stemmed and stopped)
-          termsToIdFreqHelper(word, id, termsToFreqThisPage)
+          wordList += word
         }
 
         // * populate idsToMaxCounts map (add this page)
@@ -166,6 +169,11 @@ class Index(val inputFile: String) {
           idsToMaxCounts(id) = 0
         }
       }
+
+      // populate termsToIdFreq map (to be stemmed and stopped)
+      for (linkWord <- wordList) {
+        termsToIdFreqHelper(linkWord, id, termsToFreqThisPage)
+      }
     }
   }
 
@@ -173,57 +181,83 @@ class Index(val inputFile: String) {
 
   // General Steps:
   // 1. create a weight matrix that store the w(j)(k) for all pages j and their links k
-  // The matrix take the form of a nested HashMap that maps title to a hashmap of link titles to its weight
-  // a visual representation:
-  //    A   B   C
-  // A
-  // B
-  // C
+  // The matrix take the form of a nested HashMap that maps id of a page to a hashmap of link ids to its weight
+  // a visual representation: (see graph in handout with the A, B, C)
+  //    A       B       C
+  // A  0       0.475   0.9
+  // B  0.475   0       0.475
+  // C  0.475   0.475   0
+  //--> HashMap {A_id, {B_id, 0.475; C_id, 0.475};
+  //             B_id, {A_id, 0.475; C_id, 0.475};
+  //             C_id, {A_id, 0.9; B_id, 0.475};
+  //            }
+  //2. Use the matrix in page rank algorithm to calculate the rank of each page after multiple iterations such that the
+  //distance between arrays in consecutive iterations are smaller than a constant
 
   // store the total number of pages
-  private val totalPageNum: Int = titlesToLinks.size
+  private val totalPageNum: Int = idToLinkIds.size
 
-  // create an array that contains all page titles -->useful later for checking if a link exists or not
-  private val allPages: Array[String] = new Array[String](idsToTitle.size)
-  for (value <- idsToTitle.values) {
-    allPages :+ value
+  // create an array that contains all page ids -->useful later for checking if a link exists or not
+  private val allIds: Array[Int] = new Array[Int](idToLinkIds.size)
+  for (id <- idToLinkIds.keys) {
+    allIds :+ id
   }
 
-  private def weightMatrix(): HashMap[String, HashMap[String, Double]] = {
+  /**
+    * A method that generates the weight distribution matrix
+    * @return - a HashMap that maps the id of a page to the weight distribution of its different links in the form of
+    *         another hashMap that maps the id of the link to the weight
+    */
+  private def weightMatrix(): HashMap[Int, HashMap[Int, Double]] = {
+    //initialize global constants
     val epsilon: Double = 0.15
     var weight: Double = 0.0
     //initialize empty outer hashmap
-    val outerHashMap = new HashMap[String, HashMap[String, Double]]()
-    for ((j, links) <- titlesToLinks) {
-      val totalLinks: Int = titlesToLinks(j).size
+    val outerHashMap = new HashMap[Int, HashMap[Int, Double]]()
+    for ((j, links) <- idToLinkIds) {
+      // total number of links in page j
+      val totalLinks: Int = idToLinkIds(j).size
       //initiating new inner hashMap
-      val innerHashMap = new HashMap[String, Double]()
+      val innerHashMap = new HashMap[Int, Double]()
+      // for each link in the page j
       for (k <- links) {
-        if (totalLinks == 0) { //if the page doesn't link to anything-->link once to everywhere except itself
+        //if the page doesn't link to anything --> link once to everywhere except itself
+        if (totalLinks == 0) {
           weight = epsilon / totalPageNum + (1 - epsilon) / (totalPageNum - 1)
         }
-        if (titlesToLinks(k).contains(j) && !j.equals(k)) {
+        //normal case: such as A and C in the example above
+        // --> if the links of a link contains this page & the page is not referring to itself, calculate weight
+        if (idToLinkIds(k).contains(j) && (j != k)) {
           weight = epsilon / totalPageNum + (1 - epsilon) / totalLinks
         }
-        if (j.equals(k) || !allPages.contains(k)) { //links from a page to itself | link to pages outside corpus -> ignored
+        // links from a page to itself or link to pages outside corpus -> ignored
+        if ((j == k) || !allIds.contains(k)) {
           weight = 0.0
         }
+        // otherwise
         else {
           weight = epsilon / totalPageNum
         }
+        //populate the inner hashmap with weights corresponding to link k
         innerHashMap(k) = weight
       }
+      // populate the outer hashmap with inner weight distribution for each link k in corresponding page j
       outerHashMap(j) = innerHashMap
     }
     outerHashMap
   }
 
-  private val weightDistribution: HashMap[String, HashMap[String, Double]] = weightMatrix()
+  //assign weight distribution to be the hashmap generated in weightMatrix()
+  private val weightDistribution: HashMap[Int, HashMap[Int, Double]] = weightMatrix()
 
-  //idsToLinks: HashMap[id: Int, links : Array[Int]]
-
+  /**
+    * A helper function calculating the distance between two arrays, will be used in pageRank()
+    * @param previous - the array from the previous iteration
+    * @param current - the array from this iteration
+    * @return a Double representing the Euclidean distance between the arrays
+    */
   private def distance(previous: Array[Double], current: Array[Double]): Double = {
-    // euclidean distance = sqrt of (sum of all (differences)^2)
+    // euclidean distance = sqrt of (sum of all (differences)^2)--see handout
     var differenceSum: Double = 0.0
     for (i <- 0 until previous.length - 1) {
       differenceSum += Math.pow(previous(i) - current(i), 2)
@@ -231,16 +265,29 @@ class Index(val inputFile: String) {
     Math.sqrt(differenceSum)
   }
 
+  /**
+    * the page rank algorithm that calculates the ranking score for each page
+    * @return - a HashMap mapping each id to the rank score that page receives
+    */
   private def pageRank(): HashMap[Int, Double] = {
+    // initialize previous to be an array of n zeros (previous represents the array in the previous iteration)
     var previous: Array[Double] = Array.fill[Double](totalPageNum)(0)
+    // initialize current to be an array of n 1/n (previous represents the array in this iteration), let n be 1/total number of pages
     var current: Array[Double] = Array.fill[Double](totalPageNum)(1 / totalPageNum)
+    // while distance between arrays from consecutive iterations is greater than a constant (we set the constant to be 0.0001 for now)
     while (distance(previous, current) > 0.0001) {
+      // the previous array assigned as the current array
       previous = current
-      for (j <- 0 until totalPageNum) {
+      // for id_j in all ids
+      for (j <- allIds) {
+        // reset current array to be zero
         current(j) = 0.0
-        for (k <- 0 until totalPageNum) {
-          current(j) = current(j) + weightDistribution(idsToTitle(j))(idsToTitle(k)) * previous(k)
+        // for id_k in all ids
+        for (k <- allIds) {
+          // refer to handout & the table that calculates rank of a, b, c
+          current(j) = current(j) + weightDistribution(j)(k) * previous(k)
         }
+        // set the page rank at id_j to be the rank score calculated for the links score combined
         idsToPageRank(j) = current(j)
       }
     }
