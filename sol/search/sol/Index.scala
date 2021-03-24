@@ -1,6 +1,6 @@
 package search.sol
 
-import search.src.{PorterStemmer, StopWords}
+import search.src.{FileIO, PorterStemmer, StopWords}
 
 import scala.collection.mutable.HashMap
 import scala.util.matching.Regex
@@ -43,9 +43,6 @@ class Index(val inputFile: String) {
   private val regexMetaPage = """\[\[[^\[]+?\:[^\[]+?\]\]"""
   private val regexPipeLink = """\[\[[^\[]+?\|[^\[]+?\]\]"""
 
-  // termsToIdFreq
-  // for each term in a page, we count its frequency
-  // add term + id + frequency to map
   /**
     * A helper function that populates the termsToIdFreq hashMap while stemming input words and removing stop words
     *
@@ -253,8 +250,19 @@ class Index(val inputFile: String) {
 }
 
 object Index {
-  def main(args: Array[String]) {
-    // TODO : Implement!
-    System.out.println("Not implemented yet!")
+  def main(args: Array[String]): Unit = {
+    // create instance of indexer, passing input file into constructor
+    val indexer = new Index(args(0))
+    // call parsing function which populates the idsToTitle, idsToMaxCounts, and termsToIdFreq hashmaps
+    indexer.parsing()
+    // call pageRank function which populates the idsToPageRank hashmap
+    indexer.pageRank()
+
+    // generate titles.txt
+    FileIO.printTitleFile(args(1), indexer.idsToTitle)
+    // generate docs.txt
+    FileIO.printDocumentFile(args(2), indexer.idsToMaxCounts, indexer.idsToPageRank)
+    // generate words.txt
+    FileIO.printWordsFile(args(3), indexer.termsToIdFreq)
   }
 }
