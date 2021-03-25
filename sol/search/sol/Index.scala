@@ -146,12 +146,7 @@ class Index(val inputFile: String) {
             // gets stored in wordlist and not idToLinkIds; the later items are ignored
             val linkName = linkTitle.split("\\|")(0) //e.g. "Leaders"
             val addToWords = linkTitle.split("\\|")(1) //e.g. "US Presidents"
-<<<<<<< HEAD
-            // ! can't add element to an immutable list
-            wordList += addToWords
-=======
             wordList = wordList :+ addToWords
->>>>>>> 292ff0f143004b084c94740514c8fa1cc3ba83b7
             // adding the id of the link to idToLinkIds
             if (titleToIds.keySet.contains(linkName)) {
               idToLinkIds(id) + titleToIds(linkName)
@@ -179,12 +174,7 @@ class Index(val inputFile: String) {
         }
         // our word is not a link
         else {
-<<<<<<< HEAD
-          // ! more efficient to pass directly to helper function than add to intermediate list of values
-          wordList += word
-=======
           wordList = wordList :+ word
->>>>>>> 292ff0f143004b084c94740514c8fa1cc3ba83b7
         }
 
         // * populate idsToMaxCounts map (add this page)
