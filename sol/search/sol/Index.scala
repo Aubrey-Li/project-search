@@ -10,10 +10,10 @@ import scala.xml.Node
 import scala.collection.mutable.ArrayBuffer
 
 /**
-  * Provides an XML indexer, produces files for a querier
-  *
-  * @param inputFile - the filename of the XML wiki to be indexed
-  */
+ * Provides an XML indexer, produces files for a querier
+ *
+ * @param inputFile - the filename of the XML wiki to be indexed
+ */
 class Index(val inputFile: String) {
   // titles.txt Maps the document ids to the title for each document
   private val idsToTitle = new HashMap[Int, String]
@@ -37,6 +37,7 @@ class Index(val inputFile: String) {
   // contain that word --> querier calculates tf and idf
   //  private val wordsToDocumentFrequencies = new HashMap[String, HashMap[Int, Double]]
 
+  // regex to remove white space and punctuation
   private val regex = new Regex("""\[\[[^\[]+?\]\]|[^\W_]+'[^\W_]+|[^\W_]+""")
 
   //--> this will return only the content within the [[ ]] i.e. "This is a [[hammer]]" will only return "hammer"
@@ -44,22 +45,22 @@ class Index(val inputFile: String) {
   //private val linkContentPattern = new Regex("""(?<=\[\[).+?(?=])""")
 
   private val regexLink = """\[\[[^\[]+?\]\]"""
-  private val regexMetaPage = """\[\[[^\[]+?\:[^\[]+?\]\]"""
+//  private val regexMetaPage = """\[\[[^\[]+?\:[^\[]+?\]\]"""
   private val regexPipeLink = """\[\[[^\[]+?\|[^\[]+?\]\]"""
 
   // regexes to process links in the helper functions (removes square brackets)
   private val regexPipeLinkHelper = new Regex("""[^\[\|\]]+""")
   private val regexNormalLinkHelper = new Regex("""[^\[\]]+""")
   // I decide to combine the metalink case and the normal case together, since they perform the same operations
-  private val regexMetaLinkHelper = new Regex("""[^\[\]]+""")
+//  private val regexMetaLinkHelper = new Regex("""[^\[\]]+""")
 
   /**
-    * A helper function that populates the termsToIdFreq hashMap while stemming input words and removing stop words
-    *
-    * @param word                - a word from a page in the corpus
-    * @param id                  - the id of the page this word appears in
-    * @param termsToFreqThisPage - a HashMap of stemmed terms to their frequency on this page (input id)
-    */
+   * A helper function that populates the termsToIdFreq hashMap while stemming input words and removing stop words
+   *
+   * @param word                - a word from a page in the corpus
+   * @param id                  - the id of the page this word appears in
+   * @param termsToFreqThisPage - a HashMap of stemmed terms to their frequency on this page (input id)
+   */
   private def termsToIdFreqHelper(word: String, id: Int, termsToFreqThisPage: HashMap[String, Int]): Unit = {
     // if not stop word, stem
     if (!StopWords.isStopWord(word)) {
@@ -96,13 +97,13 @@ class Index(val inputFile: String) {
   }
 
   /**
-    * helper function that takes in a pipeLink, populates the idToLinkIds hashmap and returns an array of terms to process
-    * in termsToIdFreqHelper
-    *
-    * @param linkString -- string of a link that contains words and underlying link
-    * @param id         - id of page that this linkString appears in
-    * @return - an array of words to process
-    */
+   * helper function that takes in a pipeLink, populates the idToLinkIds hashmap and returns an array of terms to process
+   * in termsToIdFreqHelper
+   *
+   * @param linkString -- string of a link that contains words and underlying link
+   * @param id         - id of page that this linkString appears in
+   * @return - an array of words to process
+   */
   private def pipeLinkHelper(linkString: String, id: Int): List[String] = {
     //using split: Leaders|US Presidents|JFK --> Array["Leaders", "US Presidents", "JFK"]; see Piazza post @1358 to see what to keep
     //summary: the first item in the array gets stored in idToLinkIds, not in wordlist; the second item (the one right behind the second pipe)
@@ -135,14 +136,14 @@ class Index(val inputFile: String) {
   }
 
   /**
-    * helper function that takes in a meta-link/normal link (the operation for them are the same),
-    * populates the idToLinkIds hashmap and returns an array of terms to process
-    * in termsToIdFreqHelper
-    *
-    * @param linkString -- string of a link that contains words and underlying link
-    * @param id         - id of page that this linkString appears in
-    * @return - an array of words to process
-    */
+   * helper function that takes in a meta-link/normal link (the operation for them are the same),
+   * populates the idToLinkIds hashmap and returns an array of terms to process
+   * in termsToIdFreqHelper
+   *
+   * @param linkString -- string of a link that contains words and underlying link
+   * @param id         - id of page that this linkString appears in
+   * @return - an array of words to process
+   */
   private def normalLinkHelper(linkString: String, id: Int): List[String] = {
 
     // remove punctuation and whitespace, eliminate the [[ ]]
@@ -164,12 +165,12 @@ class Index(val inputFile: String) {
   }
 
   /**
-    * A function that parse the document and creates a HashMap with its id as key and the list of words in the corpus
-    * as the value
-    *
-    * @return hashmap of page id to List of words in that page (with punctuation, whitespace removed)
-    *         and links, pipe links, and metapages parsed to remove square brackets
-    */
+   * A function that parse the document and creates a HashMap with its id as key and the list of words in the corpus
+   * as the value
+   *
+   * @return hashmap of page id to List of words in that page (with punctuation, whitespace removed)
+   *         and links, pipe links, and metapages parsed to remove square brackets
+   */
   private def parsing(): Unit = {
     val rootNode: Node = xml.XML.loadFile(inputFile)
 
@@ -218,10 +219,8 @@ class Index(val inputFile: String) {
               termsToIdFreqHelper(linkWord, id, termsToFreqThisPage)
             }
 
-          }
-          // case 2: meta-page link (TODO: it seems meta link handling is the same as normal link, consider merge)
+          } //case 2 and 3: normal link or meta page
           else {
-
             // extract word(s) to process (omit underlying link)
             val wordArray: List[String] = normalLinkHelper(word, id)
 
@@ -275,10 +274,10 @@ class Index(val inputFile: String) {
   val epsilon: Double = 0.15
 
   /**
-    * A method that calculates weight
-    *
-    * @return - double representing the weight with a combination of page j and link k
-    */
+   * A method that calculates weight
+   *
+   * @return - double representing the weight with a combination of page j and link k
+   */
   private def calcWeight(linkPage: Int, page: Int): Double = {
     // total number of links in page j
     val totalLinks: Int = idToLinkIds(page).size
@@ -307,12 +306,12 @@ class Index(val inputFile: String) {
 
 
   /**
-    * A helper function calculating the distance between two arrays, will be used in pageRank()
-    *
-    * @param previous - the array from the previous iteration
-    * @param current  - the array from this iteration
-    * @return a Double representing the Euclidean distance between the arrays
-    */
+   * A helper function calculating the distance between two arrays, will be used in pageRank()
+   *
+   * @param previous - the array from the previous iteration
+   * @param current  - the array from this iteration
+   * @return a Double representing the Euclidean distance between the arrays
+   */
   private def distance(previous: Array[Double], current: Array[Double]): Double = {
     // euclidean distance = sqrt of (sum of all (differences)^2)--see handout
     var differenceSum: Double = 0.0
@@ -323,10 +322,10 @@ class Index(val inputFile: String) {
   }
 
   /**
-    * the page rank algorithm that calculates the ranking score for each page
-    *
-    * @return - a HashMap mapping each id to the rank score that page receives
-    */
+   * the page rank algorithm that calculates the ranking score for each page
+   *
+   * @return - a HashMap mapping each id to the rank score that page receives
+   */
   private def pageRank(): HashMap[Int, Double] = {
     // initialize previous to be an array of n zeros (previous represents the array in the previous iteration)
     var previous: Array[Double] = Array.fill[Double](totalPageNum + 1)(0)
