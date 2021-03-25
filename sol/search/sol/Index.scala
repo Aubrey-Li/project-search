@@ -220,18 +220,8 @@ class Index(val inputFile: String) {
 
           }
           // case 2: meta-page link (TODO: it seems meta link handling is the same as normal link, consider merge)
-          else if (word.matches(regexMetaPage)) {
-
-            // extract word(s) to process (omit underlying link)
-            val wordArray: List[String] = normalLinkHelper(word, id)
-
-            // pass word(s) to termsToIdFreq helper
-            for (linkWord <- wordArray) {
-              // populate termsToIdFreq map (to be stemmed and stopped)
-              termsToIdFreqHelper(linkWord, id, termsToFreqThisPage)
-            }
-          } //case 3: normal link
           else {
+
             // extract word(s) to process (omit underlying link)
             val wordArray: List[String] = normalLinkHelper(word, id)
 
