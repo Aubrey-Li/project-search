@@ -2,6 +2,7 @@ package search.sol
 
 import search.src.{FileIO, PorterStemmer, StopWords}
 
+import scala.collection.mutable
 import scala.collection.mutable.HashSet
 import scala.collection.mutable.HashMap
 import scala.util.matching.Regex
@@ -49,6 +50,7 @@ class Index(val inputFile: String) {
   // regexes to process links in the helper functions (removes square brackets)
   private val regexPipeLinkHelper = new Regex("""[^\[\|\]]+""")
   private val regexNormalLinkHelper = new Regex("""[^\[\]]+""")
+  // I decide to combine the metalink case and the normal case together, since they perform the same operations
   private val regexMetaLinkHelper = new Regex("""[^\[\]]+""")
 
   /**
@@ -94,13 +96,14 @@ class Index(val inputFile: String) {
   }
 
   /**
-   * helper function that takes in a pipeLink, populates the idToLinkIds hashmap and returns an array of terms to process
-   * in termsToIdFreqHelper
-   * @param linkString -- string of a link that contains words and underlying link
-   * @param id - id of page that this linkString appears in
-   * @return - an array of words to process
-   */
-  private def pipeLinkHelper(linkString : String, id : Int) : List[String] = {
+    * helper function that takes in a pipeLink, populates the idToLinkIds hashmap and returns an array of terms to process
+    * in termsToIdFreqHelper
+    *
+    * @param linkString -- string of a link that contains words and underlying link
+    * @param id         - id of page that this linkString appears in
+    * @return - an array of words to process
+    */
+  private def pipeLinkHelper(linkString: String, id: Int): List[String] = {
     //using split: Leaders|US Presidents|JFK --> Array["Leaders", "US Presidents", "JFK"]; see Piazza post @1358 to see what to keep
     //summary: the first item in the array gets stored in idToLinkIds, not in wordlist; the second item (the one right behind the second pipe)
     // gets stored in wordlist and not idToLinkIds; the later items are ignored
@@ -121,8 +124,41 @@ class Index(val inputFile: String) {
     val nonLinkWords = matchesIteratorWords.toList.map { aMatch => aMatch.matched }
 
     // adding the id of the link to idToLinkIds
-    if (titleToIds.keySet.contains(linkName)) {
-      idToLinkIds(id) + titleToIds(linkName)
+    if (titleToIds.keySet.contains(LinkWordStrings(0))) {
+      if (!idToLinkIds.keySet.contains(id)) {
+        idToLinkIds(id) += titleToIds(LinkWordStrings(0))
+      } else {
+        idToLinkIds += (id -> HashSet(titleToIds(LinkWordStrings(0))))
+      }
+    }
+    nonLinkWords
+  }
+
+  /**
+    * TODO: JAVADOC
+    * helper function that takes in a meta-link, populates the idToLinkIds hashmap and returns an array of terms to process
+    * in termsToIdFreqHelper
+    *
+    * @param linkString -- string of a link that contains words and underlying link
+    * @param id         - id of page that this linkString appears in
+    * @return - an array of words to process
+    */
+  private def normalLinkHelper(linkString: String, id: Int): List[String] = {
+
+    // remove punctuation and whitespace, eliminate the [[ ]]
+    val matchesIteratorAll = regexNormalLinkHelper.findAllMatchIn(linkString)
+
+    // convert to list, there should just be one long string in the list
+    val LinkWordStrings = matchesIteratorAll.toList.map { aMatch => aMatch.matched }
+
+    // parse the long string to words
+    val matchesIteratorWords = regex.findAllMatchIn(LinkWordStrings(0))
+    // convert to list
+    val nonLinkWords = matchesIteratorWords.toList.map { aMatch => aMatch.matched }
+
+    // adding the id of the link to idToLinkIds
+    if (titleToIds.keySet.contains(LinkWordStrings(0))) {
+      idToLinkIds(id) += titleToIds(LinkWordStrings(0))
     }
     nonLinkWords
   }
@@ -145,6 +181,7 @@ class Index(val inputFile: String) {
       // add id & title to hashmap
       idsToTitle(id) = title
       titleToIds(title) = id
+      idToLinkIds(id) = new HashSet[Int]()
     }
 
 
@@ -181,23 +218,26 @@ class Index(val inputFile: String) {
             }
 
           }
-          // case 2: meta-page link
+          // case 2: meta-page link (it seems meta link handling is the same as normal link, consider merge)
           else if (word.matches(regexMetaPage)) {
-            //using regex: Category: Computer Science --> Array["Category", "Computer" ,"Science"]
-            val words = regex.findAllMatchIn(word).toList.map { aMatch => aMatch.matched } //--> "Category: Computer Science" => ["Category", "Computer" ,"Science"]
-            // merge the list with wordlist
-            wordList = wordList ++ words
-            // adding the id of the link to idToLinkIds
-            if (titleToIds.keySet.contains(linkTitle)) {
-              idToLinkIds(id) + titleToIds(linkTitle)
+
+            // extract word(s) to process (omit underlying link)
+            val wordArray: List[String] = normalLinkHelper(word, id)
+
+            // pass word(s) to termsToIdFreq helper
+            for (linkWord <- wordArray) {
+              // populate termsToIdFreq map (to be stemmed and stopped)
+              termsToIdFreqHelper(linkWord, id, termsToFreqThisPage)
             }
           } //case 3: normal link
           else {
-            // add the title to the wordlist
-            wordList = wordList :+ linkTitle
-            // adding the id of the link to idToLinkIds
-            if (titleToIds.keySet.contains(linkTitle)) {
-              idToLinkIds(id) + titleToIds(linkTitle)
+            // extract word(s) to process (omit underlying link)
+            val wordArray: List[String] = normalLinkHelper(word, id)
+
+            // pass word(s) to termsToIdFreq helper
+            for (linkWord <- wordArray) {
+              // populate termsToIdFreq map (to be stemmed and stopped)
+              termsToIdFreqHelper(linkWord, id, termsToFreqThisPage)
             }
           }
         }
@@ -238,16 +278,18 @@ class Index(val inputFile: String) {
   //distance between arrays in consecutive iterations are smaller than a constant
 
   // store the total number of pages
+  parsing()
   private val totalPageNum: Int = idToLinkIds.size
 
   // create an array that contains all page ids -->useful later for checking if a link exists or not
-  private val allIds: Array[Int] = new Array[Int](idToLinkIds.size)
-  for (id <- idToLinkIds.keys) {
-    allIds :+ id
-  }
+  //  private val allIds: Array[Int] = new Array[Int](idToLinkIds.size)
+  //  for (id <- idToLinkIds.keys) {
+  //    allIds :+ id
+  //  }
 
   /**
     * A method that generates the weight distribution matrix
+    *
     * @return - a HashMap that maps the id of a page to the weight distribution of its different links in the form of
     *         another hashMap that maps the id of the link to the weight
     */
@@ -262,41 +304,51 @@ class Index(val inputFile: String) {
       val totalLinks: Int = idToLinkIds(j).size
       //initiating new inner hashMap
       val innerHashMap = new HashMap[Int, Double]()
-      // for each link in the page j
-      for (k <- links) {
-        //if the page doesn't link to anything --> link once to everywhere except itself
-        if (totalLinks == 0) {
-          weight = epsilon / totalPageNum + (1 - epsilon) / (totalPageNum - 1)
+      //if the page doesn't link to anything --> link once to everywhere except itself
+      if (totalLinks == 0) {
+        weight = epsilon / totalPageNum + (1 - epsilon) / (totalPageNum - 1)
+        for (id <- idToLinkIds.keySet - j) // for all keys other than itself
+        // establish connection with all other ids add their weight
+          outerHashMap(j) = innerHashMap += (id -> weight)
+      } else {
+        // for each link in the page j
+        for (k <- links) {
+          //normal case: such as A and C in the example above
+          // --> if the links of a link contains this page & the page is not referring to itself, calculate weight
+          if (idToLinkIds(j).contains(k) && (j != k)) {
+            weight = epsilon / totalPageNum + (1 - epsilon) / totalLinks
+          }
+          // links from a page to itself or link to pages outside corpus -> ignored
+          if ((j == k) || !idToLinkIds.keySet.contains(k)) {
+            weight = 0.0
+          }
+          // otherwise
+          else {
+            weight = epsilon / totalPageNum
+          }
+          //populate the inner hashmap with weights corresponding to link k
+          innerHashMap(k) = weight
         }
-        //normal case: such as A and C in the example above
-        // --> if the links of a link contains this page & the page is not referring to itself, calculate weight
-        if (idToLinkIds(k).contains(j) && (j != k)) {
-          weight = epsilon / totalPageNum + (1 - epsilon) / totalLinks
+        for (id <- idToLinkIds.keySet -- innerHashMap.keySet) {// for all keys other than those linked
+          // their weight is the case in other wise
+          outerHashMap(j) = innerHashMap += (id -> epsilon / totalPageNum)
         }
-        // links from a page to itself or link to pages outside corpus -> ignored
-        if ((j == k) || !allIds.contains(k)) {
-          weight = 0.0
-        }
-        // otherwise
-        else {
-          weight = epsilon / totalPageNum
-        }
-        //populate the inner hashmap with weights corresponding to link k
-        innerHashMap(k) = weight
+        // populate the outer hashmap with inner weight distribution for each link k in corresponding page j
+        outerHashMap(j) = innerHashMap
       }
-      // populate the outer hashmap with inner weight distribution for each link k in corresponding page j
-      outerHashMap(j) = innerHashMap
     }
     outerHashMap
   }
 
   //assign weight distribution to be the hashmap generated in weightMatrix()
   private val weightDistribution: HashMap[Int, HashMap[Int, Double]] = weightMatrix()
+  private val link = List()
 
   /**
     * A helper function calculating the distance between two arrays, will be used in pageRank()
+    *
     * @param previous - the array from the previous iteration
-    * @param current - the array from this iteration
+    * @param current  - the array from this iteration
     * @return a Double representing the Euclidean distance between the arrays
     */
   private def distance(previous: Array[Double], current: Array[Double]): Double = {
@@ -310,6 +362,7 @@ class Index(val inputFile: String) {
 
   /**
     * the page rank algorithm that calculates the ranking score for each page
+    *
     * @return - a HashMap mapping each id to the rank score that page receives
     */
   private def pageRank(): HashMap[Int, Double] = {
@@ -322,11 +375,11 @@ class Index(val inputFile: String) {
       // the previous array assigned as the current array
       previous = current
       // for id_j in all ids
-      for (j <- allIds) {
+      for (j <- weightDistribution.keySet) {
         // reset current array to be zero
         current(j) = 0.0
         // for id_k in all ids
-        for (k <- allIds) {
+        for (k <- weightDistribution.keySet - j) {
           // refer to handout & the table that calculates rank of a, b, c
           current(j) = current(j) + weightDistribution(j)(k) * previous(k)
         }
@@ -344,7 +397,7 @@ object Index {
     // create instance of indexer, passing input file into constructor
     val indexer = new Index(args(0))
     // call parsing function which populates the idsToTitle, idsToMaxCounts, and termsToIdFreq hashmaps
-    indexer.parsing()
+    //indexer.parsing()
     // call pageRank function which populates the idsToPageRank hashmap
     indexer.pageRank()
 
