@@ -57,7 +57,7 @@ class Index(val inputFile: String) {
     * @param id                  - the id of the page this word appears in
     * @param termsToFreqThisPage - a HashMap of stemmed terms to their frequency on this page (input id)
     */
-  private def termsToIdFreqHelper(word: String, id: Int, termsToFreqThisPage: scala.collection.mutable.HashMap[String, Int]): Unit = {
+  private def termsToIdFreqHelper(word: String, id: Int, termsToFreqThisPage: HashMap[String, Int]): Unit = {
     // if not stop word, stem
     if (!StopWords.isStopWord(word)) {
       val term = PorterStemmer.stem(word) // should we make this lower case? .toLowerCase
@@ -100,7 +100,8 @@ class Index(val inputFile: String) {
     *         and links, pipe links, and metapages parsed to remove square brackets
     */
   private def parsing(): Unit = {
-    val rootNode: Node = xml.XML.loadFile("smallWiki.xml")
+    val rootNode: Node = xml.XML.loadFile(inputFile)
+
     for (page <- rootNode \ "page") {
       // extract id
       val id: Int = (page \\ "id").text.trim().toInt
@@ -108,11 +109,17 @@ class Index(val inputFile: String) {
       val title: String = (page \\ "title").text.trim()
       // add id & title to hashmap
       idsToTitle(id) = title
+      titleToIds(title) = id
+    }
 
+
+    for (page <- rootNode \ "page") {
+      // extract id
+      val id: Int = (page \\ "id").text.trim().toInt
       // get concatenation of all text in the page
       //concatenate title to body --> not include ids in pageString
       val body: String = (page \\ "text").text.trim()
-      val pageString: String = title.concat(body)
+      val pageString: String = (page \\ "title").text.trim().concat(body)
       // remove punctuation and whitespace, matching all words including pipe links and meta pages
       val matchesIterator = regex.findAllMatchIn(pageString)
       // convert to list (each element is a word of the page)
@@ -125,14 +132,13 @@ class Index(val inputFile: String) {
       // ! this is an immutable list. Var only affects environment names
       var wordList: List[String] = List()
 
-
       // for all words on this page
       for (word <- matchesList) {
 
         // if our word is a link
         if (word.matches(regexLink)) {
           // use regex to get rid of the [[ ]] and replace them with empty string -->please check if regex correct
-          val linkTitle: String = word.replaceAll("""/[\[\]']+/g""", "''")
+          val linkTitle: String = word.replaceAll("""/[\[\]']+/""", "''")
           // case 1: pipe link
           if (word.matches(regexPipeLink)) {
             //using split: Leaders|US Presidents|JFK --> Array["Leaders", "US Presidents", "JFK"]; see Piazza post @1358 to see what to keep
@@ -140,10 +146,16 @@ class Index(val inputFile: String) {
             // gets stored in wordlist and not idToLinkIds; the later items are ignored
             val linkName = linkTitle.split("\\|")(0) //e.g. "Leaders"
             val addToWords = linkTitle.split("\\|")(1) //e.g. "US Presidents"
+<<<<<<< HEAD
             // ! can't add element to an immutable list
             wordList += addToWords
+=======
+            wordList = wordList :+ addToWords
+>>>>>>> 292ff0f143004b084c94740514c8fa1cc3ba83b7
             // adding the id of the link to idToLinkIds
-            idToLinkIds(id) + titleToIds(linkName)
+            if (titleToIds.keySet.contains(linkName)) {
+              idToLinkIds(id) + titleToIds(linkName)
+            }
           }
           // case 2: meta-page link
           else if (word.matches(regexMetaPage)) {
@@ -152,19 +164,27 @@ class Index(val inputFile: String) {
             // merge the list with wordlist
             wordList = wordList ++ words
             // adding the id of the link to idToLinkIds
-            idToLinkIds(id) + titleToIds(linkTitle)
+            if (titleToIds.keySet.contains(linkTitle)) {
+              idToLinkIds(id) + titleToIds(linkTitle)
+            }
           } //case 3: normal link
           else {
             // add the title to the wordlist
-            wordList += linkTitle
+            wordList = wordList :+ linkTitle
             // adding the id of the link to idToLinkIds
-            idToLinkIds(id) + titleToIds(linkTitle)
+            if (titleToIds.keySet.contains(linkTitle)) {
+              idToLinkIds(id) + titleToIds(linkTitle)
+            }
           }
         }
         // our word is not a link
         else {
+<<<<<<< HEAD
           // ! more efficient to pass directly to helper function than add to intermediate list of values
           wordList += word
+=======
+          wordList = wordList :+ word
+>>>>>>> 292ff0f143004b084c94740514c8fa1cc3ba83b7
         }
 
         // * populate idsToMaxCounts map (add this page)
@@ -182,6 +202,7 @@ class Index(val inputFile: String) {
       for (linkWord <- wordList) {
         termsToIdFreqHelper(linkWord, id, termsToFreqThisPage)
       }
+
     }
   }
 
