@@ -124,19 +124,19 @@ class Index(val inputFile: String) {
     val nonLinkWords = matchesIteratorWords.toList.map { aMatch => aMatch.matched }
 
     // adding the id of the link to idToLinkIds
-    if (titleToIds.keySet.contains(LinkWordStrings(0))) {
+    if (titleToIds.keySet.contains(linkName)) {
       if (!idToLinkIds.keySet.contains(id)) {
-        idToLinkIds(id) += titleToIds(LinkWordStrings(0))
+        idToLinkIds(id) += titleToIds(linkName)
       } else {
-        idToLinkIds += (id -> HashSet(titleToIds(LinkWordStrings(0))))
+        idToLinkIds += (id -> HashSet(titleToIds(linkName)))
       }
     }
     nonLinkWords
   }
 
   /**
-    * TODO: JAVADOC
-    * helper function that takes in a meta-link, populates the idToLinkIds hashmap and returns an array of terms to process
+    * helper function that takes in a meta-link/normal link (the operation for them are the same),
+    * populates the idToLinkIds hashmap and returns an array of terms to process
     * in termsToIdFreqHelper
     *
     * @param linkString -- string of a link that contains words and underlying link
@@ -174,14 +174,15 @@ class Index(val inputFile: String) {
     val rootNode: Node = xml.XML.loadFile(inputFile)
 
     for (page <- rootNode \ "page") {
+      // extract title
+      val title: String = (page \ "title").text.trim()
       // extract id
       val id: Int = (page \\ "id").text.trim().toInt
-      // extract title
-      val title: String = (page \\ "title").text.trim()
       // add id & title to hashmap
       idsToTitle(id) = title
       titleToIds(title) = id
       idToLinkIds(id) = new HashSet[Int]()
+      idsToPageRank(id) = 0.0
     }
 
 
@@ -218,7 +219,7 @@ class Index(val inputFile: String) {
             }
 
           }
-          // case 2: meta-page link (it seems meta link handling is the same as normal link, consider merge)
+          // case 2: meta-page link (TODO: it seems meta link handling is the same as normal link, consider merge)
           else if (word.matches(regexMetaPage)) {
 
             // extract word(s) to process (omit underlying link)
@@ -277,15 +278,11 @@ class Index(val inputFile: String) {
   //2. Use the matrix in page rank algorithm to calculate the rank of each page after multiple iterations such that the
   //distance between arrays in consecutive iterations are smaller than a constant
 
-  // store the total number of pages
+  //populate the HashMaps
   parsing()
+  // store the total number of pages & set global constant epsilon
   private val totalPageNum: Int = idToLinkIds.size
-
-  // create an array that contains all page ids -->useful later for checking if a link exists or not
-  //  private val allIds: Array[Int] = new Array[Int](idToLinkIds.size)
-  //  for (id <- idToLinkIds.keys) {
-  //    allIds :+ id
-  //  }
+  val epsilon: Double = 0.15
 
   /**
     * A method that generates the weight distribution matrix
@@ -295,43 +292,39 @@ class Index(val inputFile: String) {
     */
   private def weightMatrix(): HashMap[Int, HashMap[Int, Double]] = {
     //initialize global constants
-    val epsilon: Double = 0.15
     var weight: Double = 0.0
     //initialize empty outer hashmap
     val outerHashMap = new HashMap[Int, HashMap[Int, Double]]()
     for ((j, links) <- idToLinkIds) {
       // total number of links in page j
-      val totalLinks: Int = idToLinkIds(j).size
+      val totalLinks: Int = links.size
       //initiating new inner hashMap
       val innerHashMap = new HashMap[Int, Double]()
-      //if the page doesn't link to anything --> link once to everywhere except itself
+      //if the page doesn't link to anything --> link once to everywhere
       if (totalLinks == 0) {
+        // weight equals to:
         weight = epsilon / totalPageNum + (1 - epsilon) / (totalPageNum - 1)
-        for (id <- idToLinkIds.keySet - j) // for all keys other than itself
-        // establish connection with all other ids add their weight
+        for (id <- idToLinkIds.keySet) { // for all keys
+          // map all ids to their weight calculated above
           outerHashMap(j) = innerHashMap += (id -> weight)
-      } else {
-        // for each link in the page j
+        }
+      } else { // if the page has links
+        // for each link in the page
         for (k <- links) {
-          //normal case: such as A and C in the example above
-          // --> if the links of a link contains this page & the page is not referring to itself, calculate weight
+          // --> if the the links of the page contains link k & the page is not referring to itself, calculate weight
           if (idToLinkIds(j).contains(k) && (j != k)) {
             weight = epsilon / totalPageNum + (1 - epsilon) / totalLinks
           }
-          // links from a page to itself or link to pages outside corpus -> ignored
+          // links from a page to itself or link to pages outside corpus -> ignored, weight = 0
           if ((j == k) || !idToLinkIds.keySet.contains(k)) {
             weight = 0.0
-          }
-          // otherwise
-          else {
-            weight = epsilon / totalPageNum
           }
           //populate the inner hashmap with weights corresponding to link k
           innerHashMap(k) = weight
         }
-        for (id <- idToLinkIds.keySet -- innerHashMap.keySet) {// for all keys other than those linked
-          // their weight is the case in other wise
-          outerHashMap(j) = innerHashMap += (id -> epsilon / totalPageNum)
+        //for all other pages that are not linked to this page, populate the weight of those pages in relation to this page as epsilon\n
+        for (id <- idToLinkIds.keySet -- innerHashMap.keySet) {
+          innerHashMap(id) = epsilon / totalPageNum
         }
         // populate the outer hashmap with inner weight distribution for each link k in corresponding page j
         outerHashMap(j) = innerHashMap
@@ -340,9 +333,6 @@ class Index(val inputFile: String) {
     outerHashMap
   }
 
-  //assign weight distribution to be the hashmap generated in weightMatrix()
-  private val weightDistribution: HashMap[Int, HashMap[Int, Double]] = weightMatrix()
-  private val link = List()
 
   /**
     * A helper function calculating the distance between two arrays, will be used in pageRank()
@@ -366,25 +356,30 @@ class Index(val inputFile: String) {
     * @return - a HashMap mapping each id to the rank score that page receives
     */
   private def pageRank(): HashMap[Int, Double] = {
+    val weightDistribution: HashMap[Int, HashMap[Int, Double]] = weightMatrix()
     // initialize previous to be an array of n zeros (previous represents the array in the previous iteration)
-    var previous: Array[Double] = Array.fill[Double](totalPageNum)(0)
-    // initialize current to be an array of n 1/n (previous represents the array in this iteration), let n be 1/total number of pages
-    var current: Array[Double] = Array.fill[Double](totalPageNum)(1 / totalPageNum)
+    var previous: Array[Double] = Array.fill[Double](totalPageNum + 1)(0)
+    // initialize current to be an array of n 1/n (previous represents the array in this iteration), let n be 1/50 (randomly chosen)
+    val current: Array[Double] = Array.fill[Double](totalPageNum + 1)(1.0 / 50)
     // while distance between arrays from consecutive iterations is greater than a constant (we set the constant to be 0.0001 for now)
     while (distance(previous, current) > 0.0001) {
       // the previous array assigned as the current array
       previous = current
       // for id_j in all ids
-      for (j <- weightDistribution.keySet) {
-        // reset current array to be zero
-        current(j) = 0.0
-        // for id_k in all ids
-        for (k <- weightDistribution.keySet - j) {
-          // refer to handout & the table that calculates rank of a, b, c
-          current(j) = current(j) + weightDistribution(j)(k) * previous(k)
+      for (j <- 0 to totalPageNum) {
+        if (idsToPageRank.keySet.contains(j)) {
+          // reset current array to be zero
+          current(j) = 0.0
+          // for id_k in all ids
+          for (k <- 0 to totalPageNum) {
+            // if k is
+            if (idsToPageRank.keySet.contains(k)) {
+              current(j) = current(j) + weightDistribution(k)(j) * previous(k)
+            }
+          }
+          // set the page rank at id_j to be the rank score calculated for the links score combined
+          idsToPageRank(j) = current(j)
         }
-        // set the page rank at id_j to be the rank score calculated for the links score combined
-        idsToPageRank(j) = current(j)
       }
     }
     idsToPageRank
