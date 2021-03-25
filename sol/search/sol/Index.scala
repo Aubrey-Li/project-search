@@ -285,52 +285,34 @@ class Index(val inputFile: String) {
   val epsilon: Double = 0.15
 
   /**
-    * A method that generates the weight distribution matrix
+    * A method that calculates weight
     *
-    * @return - a HashMap that maps the id of a page to the weight distribution of its different links in the form of
-    *         another hashMap that maps the id of the link to the weight
+    * @return - double representing the weight with a combination of page j and link k
     */
-  private def weightMatrix(): HashMap[Int, HashMap[Int, Double]] = {
-    //initialize global constants
-    var weight: Double = 0.0
-    //initialize empty outer hashmap
-    val outerHashMap = new HashMap[Int, HashMap[Int, Double]]()
-    for ((j, links) <- idToLinkIds) {
-      // total number of links in page j
-      val totalLinks: Int = links.size
-      //initiating new inner hashMap
-      val innerHashMap = new HashMap[Int, Double]()
-      //if the page doesn't link to anything --> link once to everywhere
-      if (totalLinks == 0) {
-        // weight equals to:
-        weight = epsilon / totalPageNum + (1 - epsilon) / (totalPageNum - 1)
-        for (id <- idToLinkIds.keySet) { // for all keys
-          // map all ids to their weight calculated above
-          outerHashMap(j) = innerHashMap += (id -> weight)
-        }
-      } else { // if the page has links
-        // for each link in the page
-        for (k <- links) {
-          // --> if the the links of the page contains link k & the page is not referring to itself, calculate weight
-          if (idToLinkIds(j).contains(k) && (j != k)) {
-            weight = epsilon / totalPageNum + (1 - epsilon) / totalLinks
-          }
-          // links from a page to itself or link to pages outside corpus -> ignored, weight = 0
-          if ((j == k) || !idToLinkIds.keySet.contains(k)) {
-            weight = 0.0
-          }
-          //populate the inner hashmap with weights corresponding to link k
-          innerHashMap(k) = weight
-        }
-        //for all other pages that are not linked to this page, populate the weight of those pages in relation to this page as epsilon\n
-        for (id <- idToLinkIds.keySet -- innerHashMap.keySet) {
-          innerHashMap(id) = epsilon / totalPageNum
-        }
-        // populate the outer hashmap with inner weight distribution for each link k in corresponding page j
-        outerHashMap(j) = innerHashMap
+  private def calcWeight(linkPage: Int, page: Int): Double = {
+    // total number of links in page j
+    val totalLinks: Int = idToLinkIds(page).size
+    //if the page doesn't link to anything --> link once to everywhere
+    if (totalLinks == 0) {
+      // weight equals to:
+      epsilon / totalPageNum + (1 - epsilon) / (totalPageNum - 1)
+    } else { // if the page has links -->linkPage is valid
+      // --> if the the links of the page contains link k & the page is not referring to itself, calculate weight
+      if (idToLinkIds(page).contains(linkPage) && (page != linkPage)) {
+        epsilon / totalPageNum + (1 - epsilon) / totalLinks
+      }
+      //if the page refers to itself and doesn't exists as a link in the page
+      else if (page == linkPage && !idToLinkIds(page).contains(linkPage)) {
+        epsilon / totalPageNum
+      }
+      // links from a page to itself or link to pages outside corpus -> ignored, weight = 0
+      else if ((idToLinkIds(page).contains(linkPage) && page == linkPage) || !idToLinkIds.keySet.contains(linkPage)) {
+        0.0
+      }
+      else {
+        epsilon / totalPageNum
       }
     }
-    outerHashMap
   }
 
 
@@ -356,7 +338,6 @@ class Index(val inputFile: String) {
     * @return - a HashMap mapping each id to the rank score that page receives
     */
   private def pageRank(): HashMap[Int, Double] = {
-    val weightDistribution: HashMap[Int, HashMap[Int, Double]] = weightMatrix()
     // initialize previous to be an array of n zeros (previous represents the array in the previous iteration)
     var previous: Array[Double] = Array.fill[Double](totalPageNum + 1)(0)
     // initialize current to be an array of n 1/n (previous represents the array in this iteration), let n be 1/50 (randomly chosen)
@@ -365,16 +346,17 @@ class Index(val inputFile: String) {
     while (distance(previous, current) > 0.0001) {
       // the previous array assigned as the current array
       previous = current
-      // for id_j in all ids
+      // for j between 0 and total page number
       for (j <- 0 to totalPageNum) {
+        //if j is an id
         if (idsToPageRank.keySet.contains(j)) {
           // reset current array to be zero
           current(j) = 0.0
-          // for id_k in all ids
+          // for k between 0 and total page number
           for (k <- 0 to totalPageNum) {
-            // if k is
+            // if k is an id
             if (idsToPageRank.keySet.contains(k)) {
-              current(j) = current(j) + weightDistribution(k)(j) * previous(k)
+              current(j) = current(j) + calcWeight(j, k) * previous(k)
             }
           }
           // set the page rank at id_j to be the rank score calculated for the links score combined
@@ -387,6 +369,8 @@ class Index(val inputFile: String) {
 
 }
 
+//TO RUN:
+// fill in the file name with relative path, titles.txt, docs.txt, and word.txt separated by space under edit configuration, program argument
 object Index {
   def main(args: Array[String]): Unit = {
     // create instance of indexer, passing input file into constructor
