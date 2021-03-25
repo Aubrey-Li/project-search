@@ -1,10 +1,11 @@
 package search.sol
 
 import java.io._
+import search.src.{FileIO, PorterStemmer, StopWords}
 
-import search.src.{FileIO}
-
+import scala.collection.mutable
 import scala.collection.mutable.HashMap
+import scala.util.matching.Regex
 
 /**
  * Represents a query REPL built off of a specified index
@@ -30,6 +31,24 @@ class Query(titleIndex: String, documentIndex: String, wordIndex: String,
   // contain that word
   private val wordsToDocumentFrequencies = new HashMap[String, HashMap[Int, Double]]
 
+  // regex to remove white space and punctuation
+  private val regex = new Regex("""\[\[[^\[]+?\]\]|[^\W_]+'[^\W_]+|[^\W_]+""")
+
+  /**
+   * Helper function that adds to value in HashMap if key already exists, or inserts new k-v pair if doesn't exist
+   * @param map -- Hashmap to update
+   * @param key -- key
+   * @param keyVal -- key value pair
+   * @param f -- function to
+   * @tparam K
+   * @tparam V
+   */
+//  def updateMap[K, V](map: HashMap, key : K, keyVal: (K, V), f: V => V): Unit = {
+//    map.get(key) match {
+//      case Some(e) => map.update(key, f(e))
+//      case None => map += keyVal
+//    }
+//  }
 
   /**
    * Handles a single query and prints out results
@@ -37,6 +56,64 @@ class Query(titleIndex: String, documentIndex: String, wordIndex: String,
    * @param userQuery - the query text
    */
   private def query(userQuery: String) {
+    // hashmap of ids to relevancy scores for our query
+    val idsToRelevancy = new HashMap[Int, Double]
+
+    // remove punctuation and whitespace, matching all words including pipe links and meta pages
+    val matchesIteratorAll = regex.findAllMatchIn(userQuery)
+
+    // convert to list (each element is a word of the page)
+    val queryWordList = matchesIteratorAll.toList.map { aMatch => aMatch.matched }
+
+    for (word <- queryWordList) {
+      // if not stop word
+      if (!StopWords.isStopWord(word)) {
+        // stem, yielding a term
+        val term = PorterStemmer.stem(word)
+        // if term is not a stop word
+        if (!StopWords.isStopWord(term)) {
+          // if the hashmap {terms to {ids to frequencies}} contains this term
+          if (wordsToDocumentFrequencies.contains(term)) {
+            // for every page id mapped to this term
+            for (page <- wordsToDocumentFrequencies(term).keysIterator) {
+              // calculate term frequency
+              // = number of times term appears in page / max frequency for this page
+              val tf: Double = wordsToDocumentFrequencies(word)(page) / idsToMaxFreqs(page)
+              // calculate inverse document frequency
+              // log( total number of pages / number of pages that contain this term )
+              val idf: Double = {
+                Math.log(idsToTitle.size.toDouble / wordsToDocumentFrequencies(term).keys.size)
+              }
+//              idsToRelevancy.updatedWith(page) {
+//                case Some(v) => Some(v + tf * idf)
+//              }
+//              idsToRelevancy + (if (idsToRelevancy.contains(term)) page ->
+//              idsToRelevancy += idsToRelevancy.get(page).map(score => page -> score + tf * idf).getOrElse(page -> tf * idf)
+
+              if (idsToRelevancy.contains(page)) {
+                  idsToRelevancy(page) = idsToRelevancy(page) + idf * tf
+              }
+              else {
+                idsToRelevancy(page) = idf * tf
+              }
+
+              if (usePageRank) {
+                idsToRelevancy(page) = idsToRelevancy(page) * idsToPageRank(page)
+              }
+            }
+          }
+        }
+      }
+    }
+
+    val sortedScores: Array[Int] = idsToRelevancy.keys.toArray.sortWith(idsToRelevancy(_) > idsToRelevancy(_))
+
+    if (sortedScores.nonEmpty) {
+      printResults(sortedScores)
+    } else {
+      println("Oops, we couldn't find any results for your query!")
+    }
+
     // split query into words
     // stem and remove stop words
     // create map of ids to relevancy scores (idsToScores)
