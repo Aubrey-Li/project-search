@@ -37,8 +37,25 @@ class Query(titleIndex: String, documentIndex: String, wordIndex: String,
    * @param userQuery - the query text
    */
   private def query(userQuery: String) {
-    // TODO : Fill this in
-    println("Implement query!")
+    // split query into words
+    // stem and remove stop words
+    // create map of ids to relevancy scores (idsToScores)
+
+    // for every term in the query
+
+        // if termsToIdFreq contains the term
+            // for every page id corresponding to this term -- wordsToDocumentFrequencies(word).keysIterator
+                //calculate tf by dividing the frequency by the max frequency (wordsToDocumentFrequencies(word)(page) / idsToMaxFreqs(page)
+                // calculate idf --> need wordToInvFreq, then do Math.log(idsToTitle.size.toDouble / wordsToDocumentFrequencies(word).keys.size
+            // if page already exists in our hashmap of idsToScores
+                // add tf * idf to this value
+            // if page doesn't exist yet
+                // set equal to tf * idf
+            // if usePageRank is set
+                // multiply value for this page in hashmap idsToScores by value for this page in idsToPageRank
+    // sort the idsToScores hashMap in descending order
+    // if scores are empty, print error message
+    // if not empty, print sorted scores using printResults(sortedScores)
   }
 
   /**

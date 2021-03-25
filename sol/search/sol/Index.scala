@@ -45,6 +45,11 @@ class Index(val inputFile: String) {
   private val regexMetaPage = """\[\[[^\[]+?\:[^\[]+?\]\]"""
   private val regexPipeLink = """\[\[[^\[]+?\|[^\[]+?\]\]"""
 
+  // ! Backup regexes for links
+  // new Regex("""[^\[\|\]]+""") --> pipe links
+  // new Regex("""[^\[\]]+""") --> normal totalLinks
+  // new Regex("""[^\[\]]+""") --> metalinks
+
   /**
     * A helper function that populates the termsToIdFreq hashMap while stemming input words and removing stop words
     *
@@ -117,6 +122,7 @@ class Index(val inputFile: String) {
       val termsToFreqThisPage = new scala.collection.mutable.HashMap[String, Int]
 
       // create a word list to store future words
+      // ! this is an immutable list. Var only affects environment names
       var wordList: List[String] = List()
 
 
@@ -134,6 +140,7 @@ class Index(val inputFile: String) {
             // gets stored in wordlist and not idToLinkIds; the later items are ignored
             val linkName = linkTitle.split("\\|")(0) //e.g. "Leaders"
             val addToWords = linkTitle.split("\\|")(1) //e.g. "US Presidents"
+            // ! can't add element to an immutable list
             wordList += addToWords
             // adding the id of the link to idToLinkIds
             idToLinkIds(id) + titleToIds(linkName)
@@ -156,6 +163,7 @@ class Index(val inputFile: String) {
         }
         // our word is not a link
         else {
+          // ! more efficient to pass directly to helper function than add to intermediate list of values
           wordList += word
         }
 
