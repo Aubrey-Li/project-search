@@ -42,7 +42,6 @@ class Query(titleIndex: String, documentIndex: String, wordIndex: String,
     // create map of ids to relevancy scores (idsToScores)
 
     // for every term in the query
-
         // if termsToIdFreq contains the term
             // for every page id corresponding to this term -- wordsToDocumentFrequencies(word).keysIterator
                 //calculate tf by dividing the frequency by the max frequency (wordsToDocumentFrequencies(word)(page) / idsToMaxFreqs(page)

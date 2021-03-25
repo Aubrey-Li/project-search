@@ -6,6 +6,7 @@ import scala.collection.mutable.HashSet
 import scala.collection.mutable.HashMap
 import scala.util.matching.Regex
 import scala.xml.Node
+import scala.collection.mutable.ArrayBuffer
 
 /**
   * Provides an XML indexer, produces files for a querier
@@ -45,10 +46,10 @@ class Index(val inputFile: String) {
   private val regexMetaPage = """\[\[[^\[]+?\:[^\[]+?\]\]"""
   private val regexPipeLink = """\[\[[^\[]+?\|[^\[]+?\]\]"""
 
-  // ! Backup regexes for links
-  // new Regex("""[^\[\|\]]+""") --> pipe links
-  // new Regex("""[^\[\]]+""") --> normal totalLinks
-  // new Regex("""[^\[\]]+""") --> metalinks
+  // regexes to process links in the helper functions (removes square brackets)
+  private val regexPipeLinkHelper = new Regex("""[^\[\|\]]+""")
+  private val regexNormalLinkHelper = new Regex("""[^\[\]]+""")
+  private val regexMetaLinkHelper = new Regex("""[^\[\]]+""")
 
   /**
     * A helper function that populates the termsToIdFreq hashMap while stemming input words and removing stop words
@@ -93,6 +94,40 @@ class Index(val inputFile: String) {
   }
 
   /**
+   * helper function that takes in a pipeLink, populates the idToLinkIds hashmap and returns an array of terms to process
+   * in termsToIdFreqHelper
+   * @param linkString -- string of a link that contains words and underlying link
+   * @param id - id of page that this linkString appears in
+   * @return - an array of words to process
+   */
+  private def pipeLinkHelper(linkString : String, id : Int) : List[String] = {
+    //using split: Leaders|US Presidents|JFK --> Array["Leaders", "US Presidents", "JFK"]; see Piazza post @1358 to see what to keep
+    //summary: the first item in the array gets stored in idToLinkIds, not in wordlist; the second item (the one right behind the second pipe)
+    // gets stored in wordlist and not idToLinkIds; the later items are ignored
+
+    // remove punctuation and whitespace, matching all words including pipe links and meta pages
+    val matchesIteratorAll = regexPipeLinkHelper.findAllMatchIn(linkString)
+
+    // convert to list (each element is a word of the page)
+    val LinkWordStrings = matchesIteratorAll.toList.map { aMatch => aMatch.matched }
+
+    val linkName = LinkWordStrings(0) //e.g. "Leaders"
+    // string after the pipe character (words to process)
+    val addToWords = LinkWordStrings(1) //e.g. "US Presidents"
+
+    // remove white space and punctuation
+    val matchesIteratorWords = regex.findAllMatchIn(addToWords)
+    // convert to list (each element is a word of the page)
+    val nonLinkWords = matchesIteratorWords.toList.map { aMatch => aMatch.matched }
+
+    // adding the id of the link to idToLinkIds
+    if (titleToIds.keySet.contains(linkName)) {
+      idToLinkIds(id) + titleToIds(linkName)
+    }
+    nonLinkWords
+  }
+
+  /**
     * A function that parse the document and creates a HashMap with its id as key and the list of words in the corpus
     * as the value
     *
@@ -128,29 +163,23 @@ class Index(val inputFile: String) {
       // hashmap to store terms to their frequency on this page (intermediate step for termsToIdFreq)
       val termsToFreqThisPage = new scala.collection.mutable.HashMap[String, Int]
 
-      // create a word list to store future words
-      // ! this is an immutable list. Var only affects environment names
-      var wordList: List[String] = List()
-
       // for all words on this page
       for (word <- matchesList) {
 
         // if our word is a link
         if (word.matches(regexLink)) {
-          // use regex to get rid of the [[ ]] and replace them with empty string -->please check if regex correct
-          val linkTitle: String = word.replaceAll("""/[\[\]']+/""", "''")
           // case 1: pipe link
           if (word.matches(regexPipeLink)) {
-            //using split: Leaders|US Presidents|JFK --> Array["Leaders", "US Presidents", "JFK"]; see Piazza post @1358 to see what to keep
-            //summary: the first item in the array gets stored in idToLinkIds, not in wordlist; the second item (the one right behind the second pipe)
-            // gets stored in wordlist and not idToLinkIds; the later items are ignored
-            val linkName = linkTitle.split("\\|")(0) //e.g. "Leaders"
-            val addToWords = linkTitle.split("\\|")(1) //e.g. "US Presidents"
-            wordList = wordList :+ addToWords
-            // adding the id of the link to idToLinkIds
-            if (titleToIds.keySet.contains(linkName)) {
-              idToLinkIds(id) + titleToIds(linkName)
+
+            // extract word(s) to process (omit underlying link)
+            val wordArray: List[String] = pipeLinkHelper(word, id)
+
+            // pass word(s) to termsToIdFreq helper
+            for (linkWord <- wordArray) {
+              // populate termsToIdFreq map (to be stemmed and stopped)
+              termsToIdFreqHelper(linkWord, id, termsToFreqThisPage)
             }
+
           }
           // case 2: meta-page link
           else if (word.matches(regexMetaPage)) {
@@ -174,7 +203,8 @@ class Index(val inputFile: String) {
         }
         // our word is not a link
         else {
-          wordList = wordList :+ word
+          // populate termsToIdFreq map (to be stemmed and stopped)
+          termsToIdFreqHelper(word, id, termsToFreqThisPage)
         }
 
         // * populate idsToMaxCounts map (add this page)
@@ -187,12 +217,6 @@ class Index(val inputFile: String) {
           idsToMaxCounts(id) = 0
         }
       }
-
-      // populate termsToIdFreq map (to be stemmed and stopped)
-      for (linkWord <- wordList) {
-        termsToIdFreqHelper(linkWord, id, termsToFreqThisPage)
-      }
-
     }
   }
 
