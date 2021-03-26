@@ -64,7 +64,7 @@ class Index(val inputFile: String) {
   private def termsToIdFreqHelper(word: String, id: Int, termsToFreqThisPage: HashMap[String, Int]): Unit = {
     // if not stop word, stem
     if (!StopWords.isStopWord(word)) {
-      val term = PorterStemmer.stem(word) // should we make this lower case? .toLowerCase
+      val term = PorterStemmer.stem(word).toLowerCase()
       // if stemmed version is not a stop word
       if (!StopWords.isStopWord(term)) {
         // if term exists in map

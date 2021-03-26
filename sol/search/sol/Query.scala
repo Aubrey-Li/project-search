@@ -1,9 +1,9 @@
 package search.sol
 
 import java.io._
-import search.src.{FileIO, PorterStemmer, StopWords}
+import search.src.{FileIO, PorterStemmer}
+import search.src.StopWords.isStopWord
 
-import scala.collection.mutable
 import scala.collection.mutable.HashMap
 import scala.util.matching.Regex
 
@@ -62,26 +62,26 @@ class Query(titleIndex: String, documentIndex: String, wordIndex: String,
     // hashmap of ids to relevancy scores for our query
     val idsToRelevancy = new HashMap[Int, Double]
 
-    // remove punctuation and whitespace, matching all words including pipe links and meta pages
+    // remove punctuation and whitespace, matching all words
     val matchesIteratorAll = regex.findAllMatchIn(userQuery)
 
-    // convert to list (each element is a word of the page)
+    // convert to list (each element is a word of the query)
     val queryWordList = matchesIteratorAll.toList.map { aMatch => aMatch.matched }
 
     for (word <- queryWordList) {
       // if not stop word
-      if (!StopWords.isStopWord(word)) {
+      if (!isStopWord(word)) {
         // stem, yielding a term
-        val term = PorterStemmer.stem(word)
+        val term = PorterStemmer.stem(word).toLowerCase()
         // if term is not a stop word
-        if (!StopWords.isStopWord(term)) {
+        if (!isStopWord(term)) {
           // if the hashmap {terms to {ids to frequencies}} contains this term
           if (wordsToDocumentFrequencies.contains(term)) {
             // for every page id mapped to this term
             for (page <- wordsToDocumentFrequencies(term).keysIterator) {
               // calculate term frequency
               // = number of times term appears in page / max frequency for this page
-              val tf: Double = wordsToDocumentFrequencies(word)(page) / idsToMaxFreqs(page)
+              val tf: Double = wordsToDocumentFrequencies(term)(page) / idsToMaxFreqs(page)
               // calculate inverse document frequency
               // log( total number of pages / number of pages that contain this term )
               val idf: Double = {
@@ -113,42 +113,26 @@ class Query(titleIndex: String, documentIndex: String, wordIndex: String,
                 idsToRelevancy(page) = idf * tf
               }
 
-              if (usePageRank) {
+              if (this.usePageRank) {
                 idsToRelevancy(page) = idsToRelevancy(page) * idsToPageRank(page)
               }
             }
           }
         }
       }
+      else {}
     }
 
     // sort relevancy scores in descending order
     val sortedScores: Array[Int] = idsToRelevancy.keys.toArray.sortWith(idsToRelevancy(_) > idsToRelevancy(_))
 
     if (sortedScores.nonEmpty) {
+      // if sorted scores are not empty, print our results
       printResults(sortedScores)
     } else {
+      // if no result, print an informative message
       println("Oops, we couldn't find any results for your query!")
     }
-
-    // split query into words
-    // stem and remove stop words
-    // create map of ids to relevancy scores (idsToScores)
-
-    // for every term in the query
-        // if termsToIdFreq contains the term
-            // for every page id corresponding to this term -- wordsToDocumentFrequencies(word).keysIterator
-                //calculate tf by dividing the frequency by the max frequency (wordsToDocumentFrequencies(word)(page) / idsToMaxFreqs(page)
-                // calculate idf --> need wordToInvFreq, then do Math.log(idsToTitle.size.toDouble / wordsToDocumentFrequencies(word).keys.size
-            // if page already exists in our hashmap of idsToScores
-                // add tf * idf to this value
-            // if page doesn't exist yet
-                // set equal to tf * idf
-            // if usePageRank is set
-                // multiply value for this page in hashmap idsToScores by value for this page in idsToPageRank
-    // sort the idsToScores hashMap in descending order
-    // if scores are empty, print error message
-    // if not empty, print sorted scores using printResults(sortedScores)
   }
 
   /**
