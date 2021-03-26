@@ -34,6 +34,9 @@ class Query(titleIndex: String, documentIndex: String, wordIndex: String,
   // regex to remove white space and punctuation
   private val regex = new Regex("""\[\[[^\[]+?\]\]|[^\W_]+'[^\W_]+|[^\W_]+""")
 
+  // Hashmap to store terms to inverse page frequency
+  private val termToInverseFreqs = new HashMap[String, Double]
+
   /**
    * Helper function that adds to value in HashMap if key already exists, or inserts new k-v pair if doesn't exist
    * @param map -- Hashmap to update
@@ -82,8 +85,21 @@ class Query(titleIndex: String, documentIndex: String, wordIndex: String,
               // calculate inverse document frequency
               // log( total number of pages / number of pages that contain this term )
               val idf: Double = {
-                Math.log(idsToTitle.size.toDouble / wordsToDocumentFrequencies(term).keys.size)
+                if (termToInverseFreqs.contains(term)) {
+                  termToInverseFreqs(term)
+                } else {
+                  val idf_intermediate = Math.log(idsToTitle.size.toDouble / wordsToDocumentFrequencies(term).keys.size)
+                  termToInverseFreqs(term) = idf_intermediate
+                  idf_intermediate
+                }
               }
+
+//              val idf2: Double = {
+//                termToInverseFreqs.get(term) match {
+//                  case None => termToInverseFreqs.put(term, Math.log(idsToTitle.size.toDouble / wordsToDocumentFrequencies(term).keys.size))
+//                  case Some(v) => v.apply(value => value * 2)
+//                }
+//              }
 //              idsToRelevancy.updatedWith(page) {
 //                case Some(v) => Some(v + tf * idf)
 //              }
@@ -106,6 +122,7 @@ class Query(titleIndex: String, documentIndex: String, wordIndex: String,
       }
     }
 
+    // sort relevancy scores in descending order
     val sortedScores: Array[Int] = idsToRelevancy.keys.toArray.sortWith(idsToRelevancy(_) > idsToRelevancy(_))
 
     if (sortedScores.nonEmpty) {

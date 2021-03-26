@@ -1,3 +1,11 @@
 out/
 .idea/
 lib/
+project-search.iml
+docs.txt
+sol/search/sol/Query.scala
+src/search/src/.DS_Store
+src/search/src/BigWiki.xml
+src/search/src/MedWiki.xml
+titles.txt
+words.txt
