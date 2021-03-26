@@ -1,8 +1,9 @@
 package search.sol
 
 import java.io._
-import search.src.{FileIO, PorterStemmer}
+import search.src.FileIO
 import search.src.StopWords.isStopWord
+import search.src.PorterStemmer.stemArray
 
 import scala.collection.mutable.HashMap
 import scala.util.matching.Regex
@@ -37,21 +38,38 @@ class Query(titleIndex: String, documentIndex: String, wordIndex: String,
   // Hashmap to store terms to inverse page frequency
   private val termToInverseFreqs = new HashMap[String, Double]
 
+  // hashmap of ids to relevancy scores for our query
+  private val idsToRelevancy = new HashMap[Int, Double]
+
   /**
-   * Helper function that adds to value in HashMap if key already exists, or inserts new k-v pair if doesn't exist
-   * @param map -- Hashmap to update
-   * @param key -- key
-   * @param keyVal -- key value pair
-   * @param f -- function to
-   * @tparam K
-   * @tparam V
+   * helper function that populates the termToInverseFreqs and idsToRelevancy hashmaps using tf and idf calculations
+   *
+   * @param term -- a term of the query
+   * @param page -- an id of a page in the corpus
    */
-//  def updateMap[K, V](map: HashMap, key : K, keyVal: (K, V), f: V => V): Unit = {
-//    map.get(key) match {
-//      case Some(e) => map.update(key, f(e))
-//      case None => map += keyVal
-//    }
-//  }
+  private def idfTfHelper(term: String, page: Int): Unit = {
+    // calculate term frequency
+    // = number of times term appears in page / max frequency for this page
+    val tf: Double = wordsToDocumentFrequencies(term)(page) / idsToMaxFreqs(page)
+    // calculate inverse document frequency
+    val idf: Double = {
+      if (termToInverseFreqs.contains(term)) {
+        termToInverseFreqs(term)
+      } else {
+        // log( total number of pages / number of pages that contain this term )
+        val idf_intermediate = Math.log(idsToTitle.size.toDouble / wordsToDocumentFrequencies(term).keys.size)
+        termToInverseFreqs(term) = idf_intermediate
+        idf_intermediate
+      }
+    }
+    // if score exists for this page, add to it
+    if (idsToRelevancy.contains(page)) {
+      idsToRelevancy(page) = idsToRelevancy(page) + idf * tf
+    } else {
+      // if score doesn't exist for this page, set it
+      idsToRelevancy(page) = idf * tf
+    }
+  }
 
   /**
    * Handles a single query and prints out results
@@ -59,64 +77,24 @@ class Query(titleIndex: String, documentIndex: String, wordIndex: String,
    * @param userQuery - the query text
    */
   private def query(userQuery: String) {
-    // hashmap of ids to relevancy scores for our query
-    val idsToRelevancy = new HashMap[Int, Double]
-
     // remove punctuation and whitespace, matching all words
-    val matchesIteratorAll = regex.findAllMatchIn(userQuery)
+    val matchesIteratorAll: Iterator[Regex.Match] = regex.findAllMatchIn(userQuery)
 
     // convert to list (each element is a word of the query)
-    val queryWordList = matchesIteratorAll.toList.map { aMatch => aMatch.matched }
+    val queryWords: Array[String] = matchesIteratorAll.toArray.map { aMatch => aMatch.matched.toLowerCase() }
+    // stem and remove stop words
+    val stoppedStemmedQuery: Array[String] = stemArray(queryWords).filter(word => !isStopWord(word))
 
-    for (word <- queryWordList) {
-      // if not stop word
-      if (!isStopWord(word)) {
-        // stem, yielding a term
-        val term = PorterStemmer.stem(word).toLowerCase()
-        // if term is not a stop word
-        if (!isStopWord(term)) {
-          // if the hashmap {terms to {ids to frequencies}} contains this term
-          if (wordsToDocumentFrequencies.contains(term)) {
-            // for every page id mapped to this term
-            for (page <- wordsToDocumentFrequencies(term).keysIterator) {
-              // calculate term frequency
-              // = number of times term appears in page / max frequency for this page
-              val tf: Double = wordsToDocumentFrequencies(term)(page) / idsToMaxFreqs(page)
-              // calculate inverse document frequency
-              // log( total number of pages / number of pages that contain this term )
-              val idf: Double = {
-                if (termToInverseFreqs.contains(term)) {
-                  termToInverseFreqs(term)
-                } else {
-                  val idf_intermediate = Math.log(idsToTitle.size.toDouble / wordsToDocumentFrequencies(term).keys.size)
-                  termToInverseFreqs(term) = idf_intermediate
-                  idf_intermediate
-                }
-              }
-
-//              val idf2: Double = {
-//                termToInverseFreqs.get(term) match {
-//                  case None => termToInverseFreqs.put(term, Math.log(idsToTitle.size.toDouble / wordsToDocumentFrequencies(term).keys.size))
-//                  case Some(v) => v.apply(value => value * 2)
-//                }
-//              }
-//              idsToRelevancy.updatedWith(page) {
-//                case Some(v) => Some(v + tf * idf)
-//              }
-//              idsToRelevancy + (if (idsToRelevancy.contains(term)) page ->
-//              idsToRelevancy += idsToRelevancy.get(page).map(score => page -> score + tf * idf).getOrElse(page -> tf * idf)
-
-              if (idsToRelevancy.contains(page)) {
-                  idsToRelevancy(page) = idsToRelevancy(page) + idf * tf
-              }
-              else {
-                idsToRelevancy(page) = idf * tf
-              }
-
-              if (this.usePageRank) {
-                idsToRelevancy(page) = idsToRelevancy(page) * idsToPageRank(page)
-              }
-            }
+    for (term <- stoppedStemmedQuery) {
+      // if the hashmap {terms to {ids to frequencies}} contains this term
+      if (wordsToDocumentFrequencies.contains(term)) {
+        // for every page id mapped to this term
+        for (page <- wordsToDocumentFrequencies(term).keysIterator) {
+          // call helper to calculate tf, idf; populate inverse freq hashmap; and populate id to relevancy hashmap
+          idfTfHelper(term, page)
+          // if page rank option is set, multiply existing relevancy score for this page by its page rank
+          if (usePageRank) {
+            idsToRelevancy(page) = idsToRelevancy(page) * idsToPageRank(page)
           }
         }
       }
@@ -124,7 +102,8 @@ class Query(titleIndex: String, documentIndex: String, wordIndex: String,
     }
 
     // sort relevancy scores in descending order
-    val sortedScores: Array[Int] = idsToRelevancy.keys.toArray.sortWith(idsToRelevancy(_) > idsToRelevancy(_))
+    //    val sortedScores: Array[Int] = idsToRelevancy.keys.toArray.sortWith(idsToRelevancy(_) > idsToRelevancy(_))
+    val sortedScores: Array[Int] = idsToRelevancy.keys.toArray.sortBy((page) => -idsToRelevancy(page))
 
     if (sortedScores.nonEmpty) {
       // if sorted scores are not empty, print our results

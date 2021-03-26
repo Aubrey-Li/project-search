@@ -1,13 +1,13 @@
 package search.sol
 
-import search.src.{FileIO, PorterStemmer, StopWords}
-
-import scala.collection.mutable
+import search.src.FileIO
+import search.src.StopWords.isStopWord
+import search.src.PorterStemmer.stemArray
+import search.src.PorterStemmer.stem
 import scala.collection.mutable.HashSet
 import scala.collection.mutable.HashMap
 import scala.util.matching.Regex
 import scala.xml.Node
-import scala.collection.mutable.ArrayBuffer
 
 /**
  * Provides an XML indexer, produces files for a querier
@@ -33,16 +33,8 @@ class Index(val inputFile: String) {
   // page title mapping to its id
   private val titleToIds = new HashMap[String, Int]
 
-  // Maps each word to a map of document IDs and frequencies of documents that
-  // contain that word --> querier calculates tf and idf
-  //  private val wordsToDocumentFrequencies = new HashMap[String, HashMap[Int, Double]]
-
   // regex to remove white space and punctuation
   private val regex = new Regex("""\[\[[^\[]+?\]\]|[^\W_]+'[^\W_]+|[^\W_]+""")
-
-  //--> this will return only the content within the [[ ]] i.e. "This is a [[hammer]]" will only return "hammer"
-  // [[presidents|washington]] will return "presidents|washington"
-  //private val linkContentPattern = new Regex("""(?<=\[\[).+?(?=])""")
 
   private val regexLink = """\[\[[^\[]+?\]\]"""
 //  private val regexMetaPage = """\[\[[^\[]+?\:[^\[]+?\]\]"""
@@ -51,7 +43,6 @@ class Index(val inputFile: String) {
   // regexes to process links in the helper functions (removes square brackets)
   private val regexPipeLinkHelper = new Regex("""[^\[\|\]]+""")
   private val regexNormalLinkHelper = new Regex("""[^\[\]]+""")
-  // I decide to combine the metalink case and the normal case together, since they perform the same operations
 //  private val regexMetaLinkHelper = new Regex("""[^\[\]]+""")
 
   /**
@@ -63,10 +54,10 @@ class Index(val inputFile: String) {
    */
   private def termsToIdFreqHelper(word: String, id: Int, termsToFreqThisPage: HashMap[String, Int]): Unit = {
     // if not stop word, stem
-    if (!StopWords.isStopWord(word)) {
-      val term = PorterStemmer.stem(word).toLowerCase()
+    if (!isStopWord(word)) {
+      val term = stem(word)
       // if stemmed version is not a stop word
-      if (!StopWords.isStopWord(term)) {
+      if (!isStopWord(term)) {
         // if term exists in map
         if (termsToFreqThisPage.contains(term)) {
           // increment frequency
@@ -110,10 +101,10 @@ class Index(val inputFile: String) {
     // gets stored in wordlist and not idToLinkIds; the later items are ignored
 
     // remove punctuation and whitespace, matching all words including pipe links and meta pages
-    val matchesIteratorAll = regexPipeLinkHelper.findAllMatchIn(linkString)
+    val pipeIterator: Iterator[Regex.Match] = regexPipeLinkHelper.findAllMatchIn(linkString)
 
     // convert to list (each element is a word of the page)
-    val LinkWordStrings = matchesIteratorAll.toList.map { aMatch => aMatch.matched }
+    val LinkWordStrings: List[String] = pipeIterator.toList.map { aMatch => aMatch.matched }
 
     val linkName = LinkWordStrings(0) //e.g. "Leaders"
     // string after the pipe character (words to process)
@@ -195,15 +186,15 @@ class Index(val inputFile: String) {
       val body: String = (page \\ "text").text.trim()
       val pageString: String = (page \\ "title").text.trim().concat(body)
       // remove punctuation and whitespace, matching all words including pipe links and meta pages
-      val matchesIterator = regex.findAllMatchIn(pageString)
+      val matchesIterator: Iterator[Regex.Match] = regex.findAllMatchIn(pageString)
       // convert to list (each element is a word of the page)
-      val matchesList = matchesIterator.toList.map { aMatch => aMatch.matched }
+      val pageWords: List[String] = matchesIterator.toList.map { aMatch => aMatch.matched.toLowerCase() }
 
       // hashmap to store terms to their frequency on this page (intermediate step for termsToIdFreq)
       val termsToFreqThisPage = new scala.collection.mutable.HashMap[String, Int]
 
       // for all words on this page
-      for (word <- matchesList) {
+      for (word <- pageWords) {
 
         // if our word is a link
         if (word.matches(regexLink)) {
