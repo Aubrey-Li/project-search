@@ -2,7 +2,6 @@ package search.sol
 
 import search.src.FileIO
 import search.src.StopWords.isStopWord
-import search.src.PorterStemmer.stemArray
 import search.src.PorterStemmer.stem
 import scala.collection.mutable.HashSet
 import scala.collection.mutable.HashMap
