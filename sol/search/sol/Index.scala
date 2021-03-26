@@ -33,6 +33,27 @@ class Index(val inputFile: String) {
   // page title mapping to its id
   private val titleToIds = new HashMap[String, Int]
 
+  //create getter
+  def getidsToTitle(): HashMap[Int, String] = {
+    idsToTitle
+  }
+
+  def getTermsToIdFreq(): HashMap[String, HashMap[Int, Double]] = {
+    termsToIdFreq
+  }
+  def getIdsToMaxCounts(): HashMap[Int, Double] = {
+    idsToMaxCounts
+  }
+  def getIdsToPageRank(): HashMap[Int, Double] = {
+    idsToPageRank
+  }
+  def getIdToLinkIds(): HashMap[Int, HashSet[Int]] = {
+    idToLinkIds
+  }
+  def getTitleToIds(): HashMap[String, Int] = {
+    titleToIds
+  }
+
   // Maps each word to a map of document IDs and frequencies of documents that
   // contain that word --> querier calculates tf and idf
   //  private val wordsToDocumentFrequencies = new HashMap[String, HashMap[Int, Double]]
@@ -61,6 +82,9 @@ class Index(val inputFile: String) {
    * @param id                  - the id of the page this word appears in
    * @param termsToFreqThisPage - a HashMap of stemmed terms to their frequency on this page (input id)
    */
+    //TODO: ONE THING THAT TAKES SPACE IN THIS PROCESS IS TO STORE A termsToFreqThisPage every page
+    //TODO: consider spliting the function that, instead of storing the number of times each word appears this page, consider
+    //todo: not creating termsToFreqThisPage, and just use a loop to keep on updating the ???
   private def termsToIdFreqHelper(word: String, id: Int, termsToFreqThisPage: HashMap[String, Int]): Unit = {
     // if not stop word, stem
     if (!StopWords.isStopWord(word)) {
@@ -90,7 +114,7 @@ class Index(val inputFile: String) {
         // if term does not exist
       } else {
         // create new Term to Id to Freq map
-        termsToIdFreq(term) = scala.collection.mutable.HashMap(id -> 1)
+        termsToIdFreq(term) = HashMap(id -> 1)
       }
       // if stop word, do nothing
     } else {}
@@ -192,15 +216,12 @@ class Index(val inputFile: String) {
       val id: Int = (page \\ "id").text.trim().toInt
       // get concatenation of all text in the page
       //concatenate title to body --> not include ids in pageString
-      val body: String = (page \\ "text").text.trim()
-      val pageString: String = (page \\ "title").text.trim().concat(body)
-      // remove punctuation and whitespace, matching all words including pipe links and meta pages
-      val matchesIterator = regex.findAllMatchIn(pageString)
-      // convert to list (each element is a word of the page)
-      val matchesList = matchesIterator.toList.map { aMatch => aMatch.matched }
+      val pageString: String = (page \\ "title").text.trim().concat((page \\ "text").text.trim())
+      // remove punctuation and whitespace, matching all words including pipe links and meta pages & convert to list
+      val matchesList = regex.findAllMatchIn(pageString).toList.map { aMatch => aMatch.matched }
 
       // hashmap to store terms to their frequency on this page (intermediate step for termsToIdFreq)
-      val termsToFreqThisPage = new scala.collection.mutable.HashMap[String, Int]
+      val termsToFreqThisPage = new HashMap[String, Int]
 
       // for all words on this page
       for (word <- matchesList) {
@@ -211,10 +232,8 @@ class Index(val inputFile: String) {
           if (word.matches(regexPipeLink)) {
 
             // extract word(s) to process (omit underlying link)
-            val wordArray: List[String] = pipeLinkHelper(word, id)
-
             // pass word(s) to termsToIdFreq helper
-            for (linkWord <- wordArray) {
+            for (linkWord <- pipeLinkHelper(word, id)) {
               // populate termsToIdFreq map (to be stemmed and stopped)
               termsToIdFreqHelper(linkWord, id, termsToFreqThisPage)
             }
@@ -222,10 +241,8 @@ class Index(val inputFile: String) {
           } //case 2 and 3: normal link or meta page
           else {
             // extract word(s) to process (omit underlying link)
-            val wordArray: List[String] = normalLinkHelper(word, id)
-
             // pass word(s) to termsToIdFreq helper
-            for (linkWord <- wordArray) {
+            for (linkWord <- normalLinkHelper(word, id)) {
               // populate termsToIdFreq map (to be stemmed and stopped)
               termsToIdFreqHelper(linkWord, id, termsToFreqThisPage)
             }
