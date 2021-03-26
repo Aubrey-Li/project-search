@@ -37,13 +37,11 @@ class Index(val inputFile: String) {
   private val regex = new Regex("""\[\[[^\[]+?\]\]|[^\W_]+'[^\W_]+|[^\W_]+""")
 
   private val regexLink = """\[\[[^\[]+?\]\]"""
-//  private val regexMetaPage = """\[\[[^\[]+?\:[^\[]+?\]\]"""
   private val regexPipeLink = """\[\[[^\[]+?\|[^\[]+?\]\]"""
 
   // regexes to process links in the helper functions (removes square brackets)
   private val regexPipeLinkHelper = new Regex("""[^\[\|\]]+""")
   private val regexNormalLinkHelper = new Regex("""[^\[\]]+""")
-//  private val regexMetaLinkHelper = new Regex("""[^\[\]]+""")
 
   /**
    * A helper function that populates the termsToIdFreq hashMap while stemming input words and removing stop words
@@ -96,16 +94,13 @@ class Index(val inputFile: String) {
    * @return - an array of words to process
    */
   private def pipeLinkHelper(linkString: String, id: Int): List[String] = {
-    //using split: Leaders|US Presidents|JFK --> Array["Leaders", "US Presidents", "JFK"]; see Piazza post @1358 to see what to keep
-    //summary: the first item in the array gets stored in idToLinkIds, not in wordlist; the second item (the one right behind the second pipe)
-    // gets stored in wordlist and not idToLinkIds; the later items are ignored
-
     // remove punctuation and whitespace, matching all words including pipe links and meta pages
     val pipeIterator: Iterator[Regex.Match] = regexPipeLinkHelper.findAllMatchIn(linkString)
 
     // convert to list (each element is a word of the page)
     val LinkWordStrings: List[String] = pipeIterator.toList.map { aMatch => aMatch.matched }
 
+    // extract the link name
     val linkName = LinkWordStrings(0) //e.g. "Leaders"
     // string after the pipe character (words to process)
     val addToWords = LinkWordStrings(1) //e.g. "US Presidents"
@@ -127,7 +122,7 @@ class Index(val inputFile: String) {
   }
 
   /**
-   * helper function that takes in a meta-link/normal link (the operation for them are the same),
+   * helper function that takes in a meta-link/normal link (the operations for them are the same),
    * populates the idToLinkIds hashmap and returns an array of terms to process
    * in termsToIdFreqHelper
    *
@@ -138,15 +133,15 @@ class Index(val inputFile: String) {
   private def normalLinkHelper(linkString: String, id: Int): List[String] = {
 
     // remove punctuation and whitespace, eliminate the [[ ]]
-    val matchesIteratorAll = regexNormalLinkHelper.findAllMatchIn(linkString)
+    val matchesIteratorAll: Iterator[Regex.Match] = regexNormalLinkHelper.findAllMatchIn(linkString)
 
     // convert to list, there should just be one long string in the list
-    val LinkWordStrings = matchesIteratorAll.toList.map { aMatch => aMatch.matched }
+    val LinkWordStrings: List[String] = matchesIteratorAll.toList.map { aMatch => aMatch.matched }
 
     // parse the long string to words
-    val matchesIteratorWords = regex.findAllMatchIn(LinkWordStrings(0))
+    val matchesIteratorWords: Iterator[Regex.Match] = regex.findAllMatchIn(LinkWordStrings(0))
     // convert to list
-    val nonLinkWords = matchesIteratorWords.toList.map { aMatch => aMatch.matched }
+    val nonLinkWords: List[String] = matchesIteratorWords.toList.map { aMatch => aMatch.matched }
 
     // adding the id of the link to idToLinkIds
     if (titleToIds.keySet.contains(LinkWordStrings(0))) {
@@ -355,8 +350,6 @@ object Index {
   def main(args: Array[String]): Unit = {
     // create instance of indexer, passing input file into constructor
     val indexer = new Index(args(0))
-    // call parsing function which populates the idsToTitle, idsToMaxCounts, and termsToIdFreq hashmaps
-    //indexer.parsing()
     // call pageRank function which populates the idsToPageRank hashmap
     indexer.pageRank()
 
