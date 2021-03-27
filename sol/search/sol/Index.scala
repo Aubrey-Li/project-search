@@ -180,13 +180,13 @@ class Index(val inputFile: String) {
       idToLinkIds(id) = new HashSet[Int]()
     }
 
-
     for (page <- rootNode \ "page") {
       // extract id
       val id: Int = (page \ "id").text.trim().toInt
-      // get concatenation of all text in the page (all steps done in one line to save memory)
-      // concatenate title to body, excluding ids in pageString
-      // remove punctuation and whitespace, matching all words including pipe links and meta pages & convert to list
+      // (all steps combined in one line to save memory!)
+      // 1. get concatenation of all text in the page
+      // 2. concatenate title to body, excluding ids in pageString
+      // 3. remove punctuation and whitespace, matching all words including pipe links and meta pages & convert to list
       val matchesArray: Array[String] = stemArray(regex.findAllMatchIn((page \ "title").text.trim()
         .concat((page \ "text").text.trim())).toArray.map { aMatch => aMatch.matched }).filter(word => !isStopWord(word))
 
@@ -238,6 +238,13 @@ class Index(val inputFile: String) {
     }
     // save memory by clearing titleToIds, which was used to populate idsToLinkIds hashmap
     titleToIds.clear()
+  }
+
+
+  private def parsing2(): Unit = {
+    val rootNode: Node = xml.XML.loadFile(inputFile)
+
+    // populate idsToTitle, idsToPageRank hashmaps
     for (page <- rootNode \ "page") {
       // extract title
       val title: String = (page \ "title").text.trim()
@@ -248,7 +255,16 @@ class Index(val inputFile: String) {
       idsToPageRank(id) = 0.0
     }
   }
-
+  private def parsing3(): Unit = {
+    val rootNode: Node = xml.XML.loadFile(inputFile)
+    // populate idsToTitle, idsToPageRank hashmaps
+    for (page <- rootNode \ "page") {
+      // extract id
+      val id: Int = (page \ "id").text.trim().toInt
+      // add id & title to hashmap
+      idsToPageRank(id) = 0.0
+    }
+  }
   // below are the implementation for calculating page rank
 
   // General Steps:
@@ -266,8 +282,6 @@ class Index(val inputFile: String) {
   //2. Use the matrix in page rank algorithm to calculate the rank of each page after multiple iterations such that the
   //distance between arrays in consecutive iterations are smaller than a constant
 
-  //populate the HashMaps
-  parsing()
   // store the total number of pages & set global constant epsilon
   private val totalPageNum: Int = idToLinkIds.size
   val epsilon: Double = 0.15
@@ -367,13 +381,18 @@ object Index {
     // create instance of indexer, passing input file into constructor
     val indexer = new Index(args(0))
     // call pageRank function which populates the idsToPageRank hashmap
-    indexer.pageRank()
-
+    indexer.parsing2()
     // generate titles.txt
     FileIO.printTitleFile(args(1), indexer.idsToTitle)
-    // generate docs.txt
-    FileIO.printDocumentFile(args(2), indexer.idsToMaxCounts, indexer.idsToPageRank)
+    indexer.idsToTitle.clear()
+
+    indexer.parsing()
     // generate words.txt
     FileIO.printWordsFile(args(3), indexer.termsToIdFreq)
+
+    indexer.parsing3()
+    indexer.pageRank()
+    // generate docs.txt
+    FileIO.printDocumentFile(args(2), indexer.idsToMaxCounts, indexer.idsToPageRank)
   }
 }
