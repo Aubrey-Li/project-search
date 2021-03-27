@@ -8,13 +8,14 @@ import search.src.PorterStemmer.stemArray
 import scala.collection.mutable.HashSet
 import scala.collection.mutable.HashMap
 import scala.util.matching.Regex
-import scala.xml.{Node, NodeSeq}
+import scala.xml.transform.{RewriteRule, RuleTransformer}
+import scala.xml.{Elem, Node, NodeSeq}
 
 /**
-  * Provides an XML indexer, produces files for a querier
-  *
-  * @param inputFile - the filename of the XML wiki to be indexed
-  */
+ * Provides an XML indexer, produces files for a querier
+ *
+ * @param inputFile - the filename of the XML wiki to be indexed
+ */
 class Index(val inputFile: String) {
   // titles.txt Maps the document ids to the title for each document
   private val idsToTitle = new HashMap[Int, String]
@@ -67,11 +68,11 @@ class Index(val inputFile: String) {
   private val regexNormalLinkHelper = new Regex("""[^\[\]]+""")
 
   /**
-    * A helper function that populates the termsToIdFreq hashMap while stemming input words and removing stop words
-    *
-    * @param term - a word from a page in the corpus
-    * @param id   - the id of the page this word appears in
-    */
+   * A helper function that populates the termsToIdFreq hashMap while stemming input words and removing stop words
+   *
+   * @param term - a word from a page in the corpus
+   * @param id   - the id of the page this word appears in
+   */
   private def termsToIdFreqHelper(term: String, id: Int): Unit = {
     // if term already exists
     if (termsToIdFreq.contains(term)) {
@@ -91,8 +92,8 @@ class Index(val inputFile: String) {
   }
 
   /**
-    * helper function that populates idToLinkIds
-    */
+   * helper function that populates idToLinkIds
+   */
   private def populateIdToLinkIds(): Unit = {
     var pages: NodeSeq = xml.XML.loadFile(inputFile) \ "page"
 
@@ -146,13 +147,13 @@ class Index(val inputFile: String) {
   }
 
   /**
-    * helper function that takes in a pipeLink, populates the idToLinkIds hashmap and returns an array of terms to process
-    * in termsToIdFreqHelper
-    *
-    * @param linkString -- string of a link that contains words and underlying link
-    * @param id         - id of page that this linkString appears in
-    * @return - an array of words to process
-    */
+   * helper function that takes in a pipeLink, populates the idToLinkIds hashmap and returns an array of terms to process
+   * in termsToIdFreqHelper
+   *
+   * @param linkString -- string of a link that contains words and underlying link
+   * @param id         - id of page that this linkString appears in
+   * @return - an array of words to process
+   */
   private def pipeLinkHelper(linkString: String, id: Int): List[String] = {
     // remove punctuation and whitespace, matching all words including pipe links and meta pages
     // convert to list (each element is a word of the page)
@@ -170,14 +171,14 @@ class Index(val inputFile: String) {
   }
 
   /**
-    * helper function that takes in a meta-link/normal link (the operations for them are the same),
-    * populates the idToLinkIds hashmap and returns an array of terms to process
-    * in termsToIdFreqHelper
-    *
-    * @param linkString -- string of a link that contains words and underlying link
-    * @param id         - id of page that this linkString appears in
-    * @return - an array of words to process
-    */
+   * helper function that takes in a meta-link/normal link (the operations for them are the same),
+   * populates the idToLinkIds hashmap and returns an array of terms to process
+   * in termsToIdFreqHelper
+   *
+   * @param linkString -- string of a link that contains words and underlying link
+   * @param id         - id of page that this linkString appears in
+   * @return - an array of words to process
+   */
   private def normalLinkHelper(linkString: String, id: Int): List[String] = {
 
     // remove punctuation and whitespace, eliminate the [[ ]]
@@ -192,12 +193,12 @@ class Index(val inputFile: String) {
 
 
   /**
-    * A function that parse the document and creates a HashMap with its id as key and the list of words in the corpus
-    * as the value
-    *
-    * @return hashmap of page id to List of words in that page (with punctuation, whitespace removed)
-    *         and links, pipe links, and metapages parsed to remove square brackets
-    */
+   * A function that parse the document and creates a HashMap with its id as key and the list of words in the corpus
+   * as the value
+   *
+   * @return hashmap of page id to List of words in that page (with punctuation, whitespace removed)
+   *         and links, pipe links, and metapages parsed to remove square brackets
+   */
   private def parsing(): Unit = {
     var pages: NodeSeq = xml.XML.loadFile(inputFile) \ "page"
 
@@ -242,7 +243,14 @@ class Index(val inputFile: String) {
           termsToIdFreqHelper(term, id)
         }
       }
-      pages = pages.filterNot(_ == page)
+      //      pages = pages.filterNot(_ == page)
+      val removeIt = new RewriteRule {
+        override def transform(n: Node): NodeSeq = n match {
+          case e: Elem => NodeSeq.Empty
+          case n => n
+        }
+      }
+      new RuleTransformer(removeIt).transform(page)
     }
   }
 
@@ -315,7 +323,19 @@ class Index(val inputFile: String) {
         }
         termsToFreqThisPage.clear()
       }
-      pages = pages.filterNot(_ == page)
+      //      pages = pages.filterNot(_ == page)
+      val removeIt = new RewriteRule {
+        override def transform(n: Node): NodeSeq = n match {
+          case e: Elem => NodeSeq.Empty
+          case n => n
+        }
+      }
+      new RuleTransformer(removeIt).transform(page)
+      //          case e: Elem if e.text.trim().toInt == id => xml.Text("")
+      //      case e: Elem if e.text.trim().toInt == id => NodeSeq.Empty
+      //      new RuleTransformer(removeIt).transform(pages \\ "id")
+      //      page = xml.Text("")
+      //      page = (rootNode \ "page").Empty()
     }
   }
 
@@ -365,10 +385,10 @@ class Index(val inputFile: String) {
 
 
   /**
-    * A method that calculates weight
-    *
-    * @return - double representing the weight with a combination of page j and link k
-    */
+   * A method that calculates weight
+   *
+   * @return - double representing the weight with a combination of page j and link k
+   */
   private def calcWeight(linkPage: Int, page: Int): Double = {
     // total number of links in page j
     val totalLinks: Int = idToLinkIds(page).size
@@ -397,12 +417,12 @@ class Index(val inputFile: String) {
 
 
   /**
-    * A helper function calculating the distance between two arrays, will be used in pageRank()
-    *
-    * @param previous - the array from the previous iteration
-    * @param current  - the array from this iteration
-    * @return a Double representing the Euclidean distance between the arrays
-    */
+   * A helper function calculating the distance between two arrays, will be used in pageRank()
+   *
+   * @param previous - the array from the previous iteration
+   * @param current  - the array from this iteration
+   * @return a Double representing the Euclidean distance between the arrays
+   */
   private def distance(previous: Array[Double], current: Array[Double]): Double = {
     // euclidean distance = sqrt of (sum of all (differences)^2)--see handout
     var differenceSum: Double = 0.0
@@ -413,10 +433,10 @@ class Index(val inputFile: String) {
   }
 
   /**
-    * the page rank algorithm that calculates the ranking score for each page
-    *
-    * @return - a HashMap mapping each id to the rank score that page receives
-    */
+   * the page rank algorithm that calculates the ranking score for each page
+   *
+   * @return - a HashMap mapping each id to the rank score that page receives
+   */
   private def pageRank(): HashMap[Int, Double] = {
     // initialize previous to be an array of n zeros (previous represents the array in the previous iteration)
     var previous: Array[Double] = Array.fill[Double](totalPageNum + 1)(0)
