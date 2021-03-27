@@ -79,8 +79,7 @@ class Query(titleIndex: String, documentIndex: String, wordIndex: String,
     // remove punctuation and whitespace, matching all words
     // convert to list (each element is a word of the query)
     // stem and remove stop words (done in one step to save memory space)
-    val stoppedStemmedQuery: Array[String] = stemArray(regex.findAllMatchIn(userQuery).toArray.map
-    { aMatch => aMatch.matched.toLowerCase() }).filter(word => !isStopWord(word))
+    val stoppedStemmedQuery: Array[String] = stemArray(regex.findAllMatchIn(userQuery).toArray.map { aMatch => aMatch.matched.toLowerCase() }).filter(word => !isStopWord(word))
 
     for (term <- stoppedStemmedQuery) {
       // if the hashmap {terms to {ids to frequencies}} contains this term
@@ -97,10 +96,6 @@ class Query(titleIndex: String, documentIndex: String, wordIndex: String,
       }
       else {}
     }
-//    //free up space for memory
-//    idsToMaxFreqs.clear()
-//    wordsToDocumentFrequencies.clear()
-//    idsToPageRank.clear()
 
     // sort relevancy scores in descending order
     //    val sortedScores: Array[Int] = idsToRelevancy.keys.toArray.sortWith(idsToRelevancy(_) > idsToRelevancy(_))
