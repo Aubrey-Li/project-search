@@ -33,29 +33,29 @@ class Index(val inputFile: String) {
   // page title mapping to its id
   private val titleToIds = new HashMap[String, Int]
 
-  //create getter
-  def getidsToTitle(): HashMap[Int, String] = {
-    idsToTitle
+  //create getter for testing purposes
+  def getIdsToTitle(): HashMap[Int, String] = {
+    idsToTitle.clone()
   }
 
   def getTermsToIdFreq(): HashMap[String, HashMap[Int, Double]] = {
-    termsToIdFreq
+    termsToIdFreq.clone()
   }
 
   def getIdsToMaxCounts(): HashMap[Int, Double] = {
-    idsToMaxCounts
+    idsToMaxCounts.clone()
   }
 
   def getIdsToPageRank(): HashMap[Int, Double] = {
-    idsToPageRank
+    idsToPageRank.clone()
   }
 
   def getIdToLinkIds(): HashMap[Int, HashSet[Int]] = {
-    idToLinkIds
+    idToLinkIds.clone()
   }
 
   def getTitleToIds(): HashMap[String, Int] = {
-    titleToIds
+    titleToIds.clone()
   }
 
   // Maps each word to a map of document IDs and frequencies of documents that
@@ -64,7 +64,6 @@ class Index(val inputFile: String) {
 
   // regex to remove white space and punctuation
   private val regex = new Regex("""\[\[[^\[]+?\]\]|[^\W_]+'[^\W_]+|[^\W_]+""")
-
   private val regexLink = """\[\[[^\[]+?\]\]"""
   private val regexPipeLink = """\[\[[^\[]+?\|[^\[]+?\]\]"""
 
@@ -119,20 +118,17 @@ class Index(val inputFile: String) {
    */
   private def pipeLinkHelper(linkString: String, id: Int): List[String] = {
     // remove punctuation and whitespace, matching all words including pipe links and meta pages
-    val pipeIterator: Iterator[Regex.Match] = regexPipeLinkHelper.findAllMatchIn(linkString)
-
     // convert to list (each element is a word of the page)
-    val LinkWordStrings: List[String] = pipeIterator.toList.map { aMatch => aMatch.matched }
+    val LinkWordStrings: List[String] = regexPipeLinkHelper.findAllMatchIn(linkString).toList.map { aMatch => aMatch.matched }
 
     // extract the link name
-    val linkName = LinkWordStrings(0) //e.g. "Leaders"
+    val linkName = LinkWordStrings.head //e.g. "Leaders"
     // string after the pipe character (words to process)
     val addToWords = LinkWordStrings(1) //e.g. "US Presidents"
 
     // remove white space and punctuation
-    val matchesIteratorWords = regex.findAllMatchIn(addToWords)
     // convert to list (each element is a word of the page)
-    val nonLinkWords = matchesIteratorWords.toList.map { aMatch => aMatch.matched }
+    val nonLinkWords = regex.findAllMatchIn(addToWords).toList.map { aMatch => aMatch.matched }
 
     // adding the id of the link to idToLinkIds
     if (titleToIds.keySet.contains(linkName)) {
@@ -157,19 +153,16 @@ class Index(val inputFile: String) {
   private def normalLinkHelper(linkString: String, id: Int): List[String] = {
 
     // remove punctuation and whitespace, eliminate the [[ ]]
-    val matchesIteratorAll: Iterator[Regex.Match] = regexNormalLinkHelper.findAllMatchIn(linkString)
-
     // convert to list, there should just be one long string in the list
-    val LinkWordStrings: List[String] = matchesIteratorAll.toList.map { aMatch => aMatch.matched }
+    val LinkWordStrings: List[String] = regexNormalLinkHelper.findAllMatchIn(linkString).toList.map { aMatch => aMatch.matched }
 
     // parse the long string to words
-    val matchesIteratorWords: Iterator[Regex.Match] = regex.findAllMatchIn(LinkWordStrings(0))
     // convert to list
-    val nonLinkWords: List[String] = matchesIteratorWords.toList.map { aMatch => aMatch.matched }
+    val nonLinkWords: List[String] = regex.findAllMatchIn(LinkWordStrings.head).toList.map { aMatch => aMatch.matched }
 
     // adding the id of the link to idToLinkIds
-    if (titleToIds.keySet.contains(LinkWordStrings(0))) {
-      idToLinkIds(id) += titleToIds(LinkWordStrings(0))
+    if (titleToIds.keySet.contains(LinkWordStrings.head)) {
+      idToLinkIds(id) += titleToIds(LinkWordStrings.head)
     }
     nonLinkWords
   }
