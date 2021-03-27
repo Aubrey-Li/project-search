@@ -4,10 +4,12 @@ import search.src.FileIO
 import search.src.StopWords.isStopWord
 import search.src.PorterStemmer.stem
 import search.src.PorterStemmer.stemArray
+
 import scala.collection.mutable.HashSet
 import scala.collection.mutable.HashMap
 import scala.util.matching.Regex
-import scala.xml.Node
+import scala.xml.{Node, NodeSeq}
+import scala.xml.transform._
 
 /**
   * Provides an XML indexer, produces files for a querier
@@ -255,6 +257,13 @@ class Index(val inputFile: String) {
           termsToIdFreqHelper(term, id)
         }
       }
+//      val removeIt = new RewriteRule {
+//        override def transform(n: Node): NodeSeq = n match {
+//          case e: Elem if (e \ "@action").text == "remove" => NodeSeq.Empty
+//          case n => n
+//        }
+//      }
+      //      page = (rootNode \ "page").Empty()
     }
     // save memory by clearing titleToIds, which was used to populate idsToLinkIds hashmap
     //titleToIds.clear()
