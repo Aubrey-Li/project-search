@@ -183,10 +183,8 @@ class Index(val inputFile: String) {
       // extract id
       val id: Int = (page \ "id").text.trim().toInt
       // add id & title to hashmap
-      idsToTitle(id) = title
       titleToIds(title) = id
       idToLinkIds(id) = new HashSet[Int]()
-      idsToPageRank(id) = 0.0
     }
 
 
@@ -244,6 +242,17 @@ class Index(val inputFile: String) {
         }
         termsToFreqThisPage.clear()
       }
+    }
+    // save memory by clearing titleToIds, which was used to populate idsToLinkIds hashmap
+    titleToIds.clear()
+    for (page <- rootNode \ "page") {
+      // extract title
+      val title: String = (page \ "title").text.trim()
+      // extract id
+      val id: Int = (page \ "id").text.trim().toInt
+      // add id & title to hashmap
+      idsToTitle(id) = title
+      idsToPageRank(id) = 0.0
     }
   }
 
