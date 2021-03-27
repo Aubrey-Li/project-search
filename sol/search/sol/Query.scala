@@ -35,8 +35,6 @@ class Query(titleIndex: String, documentIndex: String, wordIndex: String,
   // regex to remove white space and punctuation
   private val regex = new Regex("""\[\[[^\[]+?\]\]|[^\W_]+'[^\W_]+|[^\W_]+""")
 
-
-
   // hashmap of ids to relevancy scores for our query
   private val idsToRelevancy = new HashMap[Int, Double]
 
