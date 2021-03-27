@@ -106,11 +106,13 @@ class Query(titleIndex: String, documentIndex: String, wordIndex: String,
 
     // sort relevancy scores in descending order
     //    val sortedScores: Array[Int] = idsToRelevancy.keys.toArray.sortWith(idsToRelevancy(_) > idsToRelevancy(_))
-    val sortedScores: Array[Int] = idsToRelevancy.keys.toArray.sortBy((page) => -idsToRelevancy(page))
+    var sortedScores: Array[Int] = idsToRelevancy.keys.toArray.sortBy((page) => -idsToRelevancy(page))
 
     if (sortedScores.nonEmpty) {
       // if sorted scores are not empty, print our results
       printResults(sortedScores)
+      sortedScores = Array[Int](0)
+      idsToRelevancy.clear()
     } else {
       // if no result, print an informative message
       println("Oops, we couldn't find any results for your query!")
