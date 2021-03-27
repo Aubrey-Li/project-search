@@ -10,6 +10,18 @@ import scala.collection.mutable.HashMap
 import scala.util.matching.Regex
 import scala.xml.{Node, NodeSeq}
 
+//val removeIt = new RewriteRule {
+//override def transform(n: Node): NodeSeq = n match {
+////          case e: Elem if e.text.trim().toInt == id => xml.Text("")
+//case e: Elem if e.text.trim().toInt == id => NodeSeq.Empty
+//case n => n
+//}
+//}
+//new RuleTransformer(removeIt).transform(rootNode \\ "id")
+////      new RuleTransformer(removeIt).transform(page)
+////      page = xml.Text("")
+////      page = (rootNode \ "page").Empty()
+
 /**
   * Provides an XML indexer, produces files for a querier
   *
