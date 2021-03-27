@@ -35,8 +35,7 @@ class Query(titleIndex: String, documentIndex: String, wordIndex: String,
   // regex to remove white space and punctuation
   private val regex = new Regex("""\[\[[^\[]+?\]\]|[^\W_]+'[^\W_]+|[^\W_]+""")
 
-  // Hashmap to store terms to inverse page frequency
-  private val termToInverseFreqs = new HashMap[String, Double]
+
 
   // hashmap of ids to relevancy scores for our query
   private val idsToRelevancy = new HashMap[Int, Double]
@@ -48,6 +47,8 @@ class Query(titleIndex: String, documentIndex: String, wordIndex: String,
    * @param page -- an id of a page in the corpus
    */
   private def idfTfHelper(term: String, page: Int): Unit = {
+    // Hashmap to store terms to inverse page frequency
+    val termToInverseFreqs = new HashMap[String, Double]
     // calculate term frequency
     // = number of times term appears in page / max frequency for this page
     val tf: Double = wordsToDocumentFrequencies(term)(page) / idsToMaxFreqs(page)
@@ -98,6 +99,10 @@ class Query(titleIndex: String, documentIndex: String, wordIndex: String,
       }
       else {}
     }
+//    //free up space for memory
+//    idsToMaxFreqs.clear()
+//    wordsToDocumentFrequencies.clear()
+//    idsToPageRank.clear()
 
     // sort relevancy scores in descending order
     //    val sortedScores: Array[Int] = idsToRelevancy.keys.toArray.sortWith(idsToRelevancy(_) > idsToRelevancy(_))
