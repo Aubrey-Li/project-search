@@ -4,10 +4,11 @@ import search.src.FileIO
 import search.src.StopWords.isStopWord
 import search.src.PorterStemmer.stem
 import search.src.PorterStemmer.stemArray
+
 import scala.collection.mutable.HashSet
 import scala.collection.mutable.HashMap
 import scala.util.matching.Regex
-import scala.xml.Node
+import scala.xml.{Node, NodeSeq}
 
 /**
   * Provides an XML indexer, produces files for a querier
@@ -68,9 +69,8 @@ class Index(val inputFile: String) {
   /**
     * A helper function that populates the termsToIdFreq hashMap while stemming input words and removing stop words
     *
-    * @param term                - a word from a page in the corpus
-    * @param id                  - the id of the page this word appears in
-    * @param termsToFreqThisPage - a HashMap of stemmed terms to their frequency on this page (input id)
+    * @param term - a word from a page in the corpus
+    * @param id   - the id of the page this word appears in
     */
   private def termsToIdFreqHelper(term: String, id: Int): Unit = {
     // if term already exists
@@ -94,9 +94,9 @@ class Index(val inputFile: String) {
     * helper function that populates idToLinkIds
     */
   private def populateIdToLinkIds(): Unit = {
-    val rootNode: Node = xml.XML.loadFile(inputFile)
+    var pages: NodeSeq = xml.XML.loadFile(inputFile) \ "page"
 
-    for (page <- rootNode \ "page") {
+    for (page <- pages) {
       // extract title
       val title: String = (page \ "title").text.trim()
       // extract id
@@ -106,7 +106,7 @@ class Index(val inputFile: String) {
       idToLinkIds(id) = new HashSet[Int]()
     }
 
-    for (page <- rootNode \ "page") {
+    for (page <- pages) {
       // extract id
       val id: Int = (page \ "id").text.trim().toInt
       // find all link matches using regex
@@ -141,6 +141,7 @@ class Index(val inputFile: String) {
           }
         }
       }
+      pages = pages.filterNot(_ == page)
     }
   }
 
@@ -165,15 +166,6 @@ class Index(val inputFile: String) {
     // remove white space and punctuation
     // convert to list (each element is a word of the page)
     val nonLinkWords = regex.findAllMatchIn(addToWords).toList.map { aMatch => aMatch.matched }
-    //
-    //    // adding the id of the link to idToLinkIds
-    //    if (titleToIds.keySet.contains(linkName)) {
-    //      if (!idToLinkIds.keySet.contains(id)) {
-    //        idToLinkIds(id) += titleToIds(linkName)
-    //      } else {
-    //        idToLinkIds += (id -> HashSet(titleToIds(linkName)))
-    //      }
-    //    }
     nonLinkWords
   }
 
@@ -195,11 +187,6 @@ class Index(val inputFile: String) {
     // parse the long string to words
     // convert to list
     val nonLinkWords: List[String] = regex.findAllMatchIn(LinkWordStrings.head).toList.map { aMatch => aMatch.matched }
-
-    // adding the id of the link to idToLinkIds
-    //    if (titleToIds.keySet.contains(LinkWordStrings.head)) {
-    //      idToLinkIds(id) += titleToIds(LinkWordStrings.head)
-    //    }
     nonLinkWords
   }
 
@@ -212,9 +199,9 @@ class Index(val inputFile: String) {
     *         and links, pipe links, and metapages parsed to remove square brackets
     */
   private def parsing(): Unit = {
-    val rootNode: Node = xml.XML.loadFile(inputFile)
+    var pages: NodeSeq = xml.XML.loadFile(inputFile) \ "page"
 
-    for (page <- rootNode \ "page") {
+    for (page <- pages) {
       // extract id
       val id: Int = (page \ "id").text.trim().toInt
       // (all steps combined in one line to save memory!)
@@ -255,9 +242,8 @@ class Index(val inputFile: String) {
           termsToIdFreqHelper(term, id)
         }
       }
+      pages = pages.filterNot(_ == page)
     }
-    // save memory by clearing titleToIds, which was used to populate idsToLinkIds hashmap
-    //titleToIds.clear()
   }
 
   private def termsMaxHelper(term: String, id: Int, termsToFreqThisPage: HashMap[String, Int]): Unit = {
@@ -272,9 +258,9 @@ class Index(val inputFile: String) {
   }
 
   private def populateMaxCounts(): Unit = {
-    val rootNode: Node = xml.XML.loadFile(inputFile)
+    var pages: NodeSeq = xml.XML.loadFile(inputFile) \ "page"
 
-    for (page <- rootNode \ "page") {
+    for (page <- pages) {
       // extract id
       val id: Int = (page \ "id").text.trim().toInt
       // (all steps combined in one line to save memory!)
@@ -329,14 +315,15 @@ class Index(val inputFile: String) {
         }
         termsToFreqThisPage.clear()
       }
+      pages = pages.filterNot(_ == page)
     }
   }
 
   private def populateIdToTitle(): Unit = {
-    val rootNode: Node = xml.XML.loadFile(inputFile)
+    val pages: NodeSeq = xml.XML.loadFile(inputFile) \ "page"
 
     // populate idsToTitle, idsToPageRank hashmaps
-    for (page <- rootNode \ "page") {
+    for (page <- pages) {
       // extract title
       val title: String = (page \ "title").text.trim()
       // extract id
@@ -348,9 +335,9 @@ class Index(val inputFile: String) {
 
   //populate idToPageRank
   private def populatePageRank(): Unit = {
-    val rootNode: Node = xml.XML.loadFile(inputFile)
+    val pages: NodeSeq = xml.XML.loadFile(inputFile) \ "page"
     // populate idsToTitle, idsToPageRank hashmaps
-    for (page <- rootNode \ "page") {
+    for (page <- pages) {
       // extract id
       val id: Int = (page \ "id").text.trim().toInt
       // add id & title to hashmap
