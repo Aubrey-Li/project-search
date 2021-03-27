@@ -9,13 +9,13 @@ import scala.collection.mutable.HashMap
 import scala.util.matching.Regex
 
 /**
- * Represents a query REPL built off of a specified index
- *
- * @param titleIndex    - the filename of the title index
- * @param documentIndex - the filename of the document index
- * @param wordIndex     - the filename of the word index
- * @param usePageRank   - true if page rank is to be incorporated into scoring
- */
+  * Represents a query REPL built off of a specified index
+  *
+  * @param titleIndex    - the filename of the title index
+  * @param documentIndex - the filename of the document index
+  * @param wordIndex     - the filename of the word index
+  * @param usePageRank   - true if page rank is to be incorporated into scoring
+  */
 class Query(titleIndex: String, documentIndex: String, wordIndex: String,
             usePageRank: Boolean) {
 
@@ -35,20 +35,19 @@ class Query(titleIndex: String, documentIndex: String, wordIndex: String,
   // regex to remove white space and punctuation
   private val regex = new Regex("""\[\[[^\[]+?\]\]|[^\W_]+'[^\W_]+|[^\W_]+""")
 
-
+  // Hashmap to store terms to inverse page frequency
+  private val termToInverseFreqs = new HashMap[String, Double]
 
   // hashmap of ids to relevancy scores for our query
   private val idsToRelevancy = new HashMap[Int, Double]
 
   /**
-   * helper function that populates the termToInverseFreqs and idsToRelevancy hashmaps using tf and idf calculations
-   *
-   * @param term -- a term of the query
-   * @param page -- an id of a page in the corpus
-   */
+    * helper function that populates the termToInverseFreqs and idsToRelevancy hashmaps using tf and idf calculations
+    *
+    * @param term -- a term of the query
+    * @param page -- an id of a page in the corpus
+    */
   private def idfTfHelper(term: String, page: Int): Unit = {
-    // Hashmap to store terms to inverse page frequency
-    val termToInverseFreqs = new HashMap[String, Double]
     // calculate term frequency
     // = number of times term appears in page / max frequency for this page
     val tf: Double = wordsToDocumentFrequencies(term)(page) / idsToMaxFreqs(page)
@@ -73,10 +72,10 @@ class Query(titleIndex: String, documentIndex: String, wordIndex: String,
   }
 
   /**
-   * Handles a single query and prints out results
-   *
-   * @param userQuery - the query text
-   */
+    * Handles a single query and prints out results
+    *
+    * @param userQuery - the query text
+    */
   private def query(userQuery: String) {
     // remove punctuation and whitespace, matching all words
     // convert to list (each element is a word of the query)
@@ -99,10 +98,6 @@ class Query(titleIndex: String, documentIndex: String, wordIndex: String,
       }
       else {}
     }
-//    //free up space for memory
-//    idsToMaxFreqs.clear()
-//    wordsToDocumentFrequencies.clear()
-//    idsToPageRank.clear()
 
     // sort relevancy scores in descending order
     //    val sortedScores: Array[Int] = idsToRelevancy.keys.toArray.sortWith(idsToRelevancy(_) > idsToRelevancy(_))
@@ -118,10 +113,10 @@ class Query(titleIndex: String, documentIndex: String, wordIndex: String,
   }
 
   /**
-   * Format and print up to 10 results from the results list
-   *
-   * @param results - an array of all results to be printed
-   */
+    * Format and print up to 10 results from the results list
+    *
+    * @param results - an array of all results to be printed
+    */
   private def printResults(results: Array[Int]) {
     for (i <- 0 until Math.min(10, results.size)) {
       println("\t" + (i + 1) + " " + idsToTitle(results(i)))
@@ -138,8 +133,8 @@ class Query(titleIndex: String, documentIndex: String, wordIndex: String,
   }
 
   /**
-   * Starts the read and print loop for queries
-   */
+    * Starts the read and print loop for queries
+    */
   def run() {
     val inputReader = new BufferedReader(new InputStreamReader(System.in))
 
