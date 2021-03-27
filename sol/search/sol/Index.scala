@@ -58,10 +58,6 @@ class Index(val inputFile: String) {
     titleToIds.clone()
   }
 
-  // Maps each word to a map of document IDs and frequencies of documents that
-  // contain that word --> querier calculates tf and idf
-  //  private val wordsToDocumentFrequencies = new HashMap[String, HashMap[Int, Double]]
-
   // regex to remove white space and punctuation
   private val regex = new Regex("""\[\[[^\[]+?\]\]|[^\W_]+'[^\W_]+|[^\W_]+""")
   private val regexLink = """\[\[[^\[]+?\]\]"""
@@ -78,9 +74,6 @@ class Index(val inputFile: String) {
    * @param id                  - the id of the page this word appears in
    * @param termsToFreqThisPage - a HashMap of stemmed terms to their frequency on this page (input id)
    */
-  //TODO: ONE THING THAT TAKES SPACE IN THIS PROCESS IS TO STORE A termsToFreqThisPage every page
-  //TODO: consider spliting the function that, instead of storing the number of times each word appears this page, consider
-  //todo: not creating termsToFreqThisPage, and just use a loop to keep on updating the ???
   private def termsToIdFreqHelper(term: String, id: Int, termsToFreqThisPage: HashMap[String, Int]): Unit = {
     // if term exists in map
     if (termsToFreqThisPage.contains(term)) {
@@ -335,9 +328,11 @@ class Index(val inputFile: String) {
   private def pageRank(): HashMap[Int, Double] = {
     // initialize previous to be an array of n zeros (previous represents the array in the previous iteration)
     var previous: Array[Double] = Array.fill[Double](totalPageNum + 1)(0)
-    // initialize current to be an array of n 1/n (previous represents the array in this iteration), let n be 1/50 (randomly chosen)
+    // initialize current to be an array of n 1/n (previous represents the array in this iteration),
+    // let n be 1/50 (randomly chosen)
     val current: Array[Double] = Array.fill[Double](totalPageNum + 1)(1.0 / 50)
-    // while distance between arrays from consecutive iterations is greater than a constant (we set the constant to be 0.0001 for now)
+    // while distance between arrays from consecutive iterations is greater than a constant
+    // (we set the constant to be 0.0001 for now)
     while (distance(previous, current) > 0.0001) {
       // the previous array assigned as the current array
       previous = current
@@ -365,7 +360,8 @@ class Index(val inputFile: String) {
 }
 
 //TO RUN:
-// fill in the file name with relative path, titles.txt, docs.txt, and word.txt separated by space under edit configuration, program argument
+// fill in the file name with relative path, titles.txt, docs.txt, and word.txt separated by space under
+// edit configuration, program argument
 object Index {
   def main(args: Array[String]): Unit = {
     // create instance of indexer, passing input file into constructor
