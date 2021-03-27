@@ -50,13 +50,10 @@ class Index(val inputFile: String) {
     idsToPageRank.clone()
   }
 
-  def getIdToLinkIds(): HashMap[Int, HashSet[Int]] = {
-    idToLinkIds.clone()
-  }
 
-  def getTitleToIds(): HashMap[String, Int] = {
-    titleToIds.clone()
-  }
+  // store the total number of pages & set global constant epsilon
+  private var totalPageNum: Int = 0
+  val epsilon: Double = 0.15
 
   // regex to remove white space and punctuation
   private val regex = new Regex("""\[\[[^\[]+?\]\]|[^\W_]+'[^\W_]+|[^\W_]+""")
@@ -70,7 +67,7 @@ class Index(val inputFile: String) {
   /**
    * A helper function that populates the termsToIdFreq hashMap while stemming input words and removing stop words
    *
-   * @param word                - a word from a page in the corpus
+   * @param term                - a word from a page in the corpus
    * @param id                  - the id of the page this word appears in
    * @param termsToFreqThisPage - a HashMap of stemmed terms to their frequency on this page (input id)
    */
@@ -102,6 +99,70 @@ class Index(val inputFile: String) {
   }
 
   /**
+    * helper function that populates idToLinkIds
+    */
+  private def populateIdToLinkIds(): Unit = {
+    val rootNode: Node = xml.XML.loadFile(inputFile)
+
+    for (page <- rootNode \ "page") {
+      // extract title
+      val title: String = (page \ "title").text.trim()
+      // extract id
+      val id: Int = (page \ "id").text.trim().toInt
+      // add id & title to hashmap
+      titleToIds(title) = id
+      idToLinkIds(id) = new HashSet[Int]()
+    }
+
+    for (page <- rootNode \ "page") {
+      // extract id
+      val id: Int = (page \ "id").text.trim().toInt
+      // (all steps combined in one line to save memory!)
+      // 1. get concatenation of all text in the page
+      // 2. concatenate title to body, excluding ids in pageString
+      // 3. remove punctuation and whitespace, matching all words including pipe links and meta pages & convert to list
+      val matchesArray: Array[String] = stemArray(regex.findAllMatchIn((page \ "title").text.trim()
+        .concat((page \ "text").text.trim())).toArray.map { aMatch => aMatch.matched }).filter(word => !isStopWord(word))
+
+      // for all words on this page
+      for (term <- matchesArray) {
+
+        // if our word is a link
+        if (term.matches(regexLink)) {
+          // case 1: pipe link
+          if (term.matches(regexPipeLink)) {
+            val LinkWordStrings: List[String] = regexPipeLinkHelper.findAllMatchIn(term).toList.map { aMatch => aMatch.matched }
+
+            // extract the link name
+            val linkName = LinkWordStrings.head //e.g. "Leaders"
+
+            // adding the id of the link to idToLinkIds
+            if (titleToIds.keySet.contains(linkName)) {
+              if (!idToLinkIds.keySet.contains(id)) {
+                idToLinkIds(id) += titleToIds(linkName)
+              } else {
+                idToLinkIds += (id -> HashSet(titleToIds(linkName)))
+              }
+            }
+          } //case 2 and 3: normal link or meta page
+          else {
+            // remove punctuation and whitespace, eliminate the [[ ]]
+            // convert to list, there should just be one long string in the list
+            val LinkWordStrings: List[String] = regexNormalLinkHelper.findAllMatchIn(term).toList.map { aMatch => aMatch.matched }
+
+            // adding the id of the link to idToLinkIds
+            if (titleToIds.keySet.contains(LinkWordStrings.head)) {
+              idToLinkIds(id) += titleToIds(LinkWordStrings.head)
+            }
+          }
+        }
+        // our word is not a link --> don't do anything
+        else {}
+      }
+    }
+  }
+
+  /**
    * helper function that takes in a pipeLink, populates the idToLinkIds hashmap and returns an array of terms to process
    * in termsToIdFreqHelper
    *
@@ -115,22 +176,22 @@ class Index(val inputFile: String) {
     val LinkWordStrings: List[String] = regexPipeLinkHelper.findAllMatchIn(linkString).toList.map { aMatch => aMatch.matched }
 
     // extract the link name
-    val linkName = LinkWordStrings.head //e.g. "Leaders"
+//    val linkName = LinkWordStrings.head //e.g. "Leaders"
     // string after the pipe character (words to process)
     val addToWords = LinkWordStrings(1) //e.g. "US Presidents"
 
     // remove white space and punctuation
     // convert to list (each element is a word of the page)
     val nonLinkWords = regex.findAllMatchIn(addToWords).toList.map { aMatch => aMatch.matched }
-
-    // adding the id of the link to idToLinkIds
-    if (titleToIds.keySet.contains(linkName)) {
-      if (!idToLinkIds.keySet.contains(id)) {
-        idToLinkIds(id) += titleToIds(linkName)
-      } else {
-        idToLinkIds += (id -> HashSet(titleToIds(linkName)))
-      }
-    }
+//
+//    // adding the id of the link to idToLinkIds
+//    if (titleToIds.keySet.contains(linkName)) {
+//      if (!idToLinkIds.keySet.contains(id)) {
+//        idToLinkIds(id) += titleToIds(linkName)
+//      } else {
+//        idToLinkIds += (id -> HashSet(titleToIds(linkName)))
+//      }
+//    }
     nonLinkWords
   }
 
@@ -154,11 +215,12 @@ class Index(val inputFile: String) {
     val nonLinkWords: List[String] = regex.findAllMatchIn(LinkWordStrings.head).toList.map { aMatch => aMatch.matched }
 
     // adding the id of the link to idToLinkIds
-    if (titleToIds.keySet.contains(LinkWordStrings.head)) {
-      idToLinkIds(id) += titleToIds(LinkWordStrings.head)
-    }
+//    if (titleToIds.keySet.contains(LinkWordStrings.head)) {
+//      idToLinkIds(id) += titleToIds(LinkWordStrings.head)
+//    }
     nonLinkWords
   }
+
 
   /**
    * A function that parse the document and creates a HashMap with its id as key and the list of words in the corpus
@@ -169,16 +231,6 @@ class Index(val inputFile: String) {
    */
   private def parsing(): Unit = {
     val rootNode: Node = xml.XML.loadFile(inputFile)
-
-    for (page <- rootNode \ "page") {
-      // extract title
-      val title: String = (page \ "title").text.trim()
-      // extract id
-      val id: Int = (page \ "id").text.trim().toInt
-      // add id & title to hashmap
-      titleToIds(title) = id
-      idToLinkIds(id) = new HashSet[Int]()
-    }
 
     for (page <- rootNode \ "page") {
       // extract id
@@ -237,7 +289,7 @@ class Index(val inputFile: String) {
       }
     }
     // save memory by clearing titleToIds, which was used to populate idsToLinkIds hashmap
-    titleToIds.clear()
+    //titleToIds.clear()
   }
 
 
@@ -252,9 +304,9 @@ class Index(val inputFile: String) {
       val id: Int = (page \ "id").text.trim().toInt
       // add id & title to hashmap
       idsToTitle(id) = title
-      idsToPageRank(id) = 0.0
     }
   }
+
   private def parsing3(): Unit = {
     val rootNode: Node = xml.XML.loadFile(inputFile)
     // populate idsToTitle, idsToPageRank hashmaps
@@ -264,6 +316,7 @@ class Index(val inputFile: String) {
       // add id & title to hashmap
       idsToPageRank(id) = 0.0
     }
+    totalPageNum = idsToPageRank.size
   }
   // below are the implementation for calculating page rank
 
@@ -282,9 +335,6 @@ class Index(val inputFile: String) {
   //2. Use the matrix in page rank algorithm to calculate the rank of each page after multiple iterations such that the
   //distance between arrays in consecutive iterations are smaller than a constant
 
-  // store the total number of pages & set global constant epsilon
-  private val totalPageNum: Int = idToLinkIds.size
-  val epsilon: Double = 0.15
 
   /**
    * A method that calculates weight
@@ -380,16 +430,22 @@ object Index {
   def main(args: Array[String]): Unit = {
     // create instance of indexer, passing input file into constructor
     val indexer = new Index(args(0))
-    // call pageRank function which populates the idsToPageRank hashmap
+
+    // have a buffer-like structure, processes a bit of info at a time and clears memory after each small step
     indexer.parsing2()
     // generate titles.txt
     FileIO.printTitleFile(args(1), indexer.idsToTitle)
     indexer.idsToTitle.clear()
 
+    //handles just words
     indexer.parsing()
     // generate words.txt
     FileIO.printWordsFile(args(3), indexer.termsToIdFreq)
-
+    indexer.termsToIdFreq.clear()
+    //populates IdToLinkIds
+    indexer.populateIdToLinkIds()
+    //clear the titleToIds
+    indexer.titleToIds.clear()
     indexer.parsing3()
     indexer.pageRank()
     // generate docs.txt
