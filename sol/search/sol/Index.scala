@@ -8,7 +8,7 @@ import search.src.PorterStemmer.stemArray
 import scala.collection.mutable.HashSet
 import scala.collection.mutable.HashMap
 import scala.util.matching.Regex
-import scala.xml.{Node, NodeSeq}
+import scala.xml.{Elem, Node, NodeSeq}
 import scala.xml.transform._
 
 /**
@@ -257,16 +257,18 @@ class Index(val inputFile: String) {
           termsToIdFreqHelper(term, id)
         }
       }
-//      val removeIt = new RewriteRule {
-//        override def transform(n: Node): NodeSeq = n match {
-//          case e: Elem if (e \ "@action").text == "remove" => NodeSeq.Empty
-//          case n => n
-//        }
-//      }
+      val removeIt = new RewriteRule {
+        override def transform(n: Node): NodeSeq = n match {
+//          case e: Elem if e.text.trim().toInt == id => xml.Text("")
+          case e: Elem if e.text.trim().toInt == id => NodeSeq.Empty
+          case n => n
+        }
+      }
+      new RuleTransformer(removeIt).transform(rootNode \\ "id")
+//      new RuleTransformer(removeIt).transform(page)
+//      page = xml.Text("")
       //      page = (rootNode \ "page").Empty()
     }
-    // save memory by clearing titleToIds, which was used to populate idsToLinkIds hashmap
-    //titleToIds.clear()
   }
 
   private def termsMaxHelper(term: String, id: Int, termsToFreqThisPage: HashMap[String, Int]): Unit = {
