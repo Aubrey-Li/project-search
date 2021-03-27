@@ -11,5 +11,16 @@
     <orderEntry type="library" name="scala-sdk-2.13.5" level="application" />
     <orderEntry type="library" name="org.scala-lang.modules:scala-xml_2.11:1.0.5" level="project" />
     <orderEntry type="library" name="scala-sdk-2.12.12" level="application" />
+    <orderEntry type="module-library">
+      <library>
+        <CLASSES>
+          <root url="jar://$MODULE_DIR$/../hw05-scala-Aubrey-Li/lib/tester.jar!/" />
+        </CLASSES>
+        <JAVADOC />
+        <SOURCES>
+          <root url="jar://$MODULE_DIR$/../hw05-scala-Aubrey-Li/lib/tester.jar!/" />
+        </SOURCES>
+      </library>
+    </orderEntry>
   </component>
 </module>

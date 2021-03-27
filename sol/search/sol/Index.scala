@@ -35,22 +35,6 @@ class Index(val inputFile: String) {
   // page title mapping to its id
   private val titleToIds = new HashMap[String, Int]
 
-  //create getter for testing purposes
-  def getIdsToTitle(): HashMap[Int, String] = {
-    idsToTitle.clone()
-  }
-
-  def getTermsToIdFreq(): HashMap[String, HashMap[Int, Double]] = {
-    termsToIdFreq.clone()
-  }
-
-  def getIdsToMaxCounts(): HashMap[Int, Double] = {
-    idsToMaxCounts.clone()
-  }
-
-  def getIdsToPageRank(): HashMap[Int, Double] = {
-    idsToPageRank.clone()
-  }
 
 
   // store the total number of pages & set global constant epsilon
@@ -73,7 +57,15 @@ class Index(val inputFile: String) {
    * @param term - a word from a page in the corpus
    * @param id   - the id of the page this word appears in
    */
-  private def termsToIdFreqHelper(term: String, id: Int): Unit = {
+  private def termsToIdFreqHelper(term: String, id: Int, termsToFreqThisPage: HashMap[String, Int]): Unit = {
+    // if term exists in map
+    if (termsToFreqThisPage.contains(term)) {
+      // increment frequency
+      termsToFreqThisPage(term) += 1
+    } else {
+      // add it to the map
+      termsToFreqThisPage(term) = 1
+    }
     // if term already exists
     if (termsToIdFreq.contains(term)) {
       // if id of term exists (page that term appears in)
@@ -94,7 +86,7 @@ class Index(val inputFile: String) {
   /**
    * helper function that populates idToLinkIds
    */
-  private def populateIdToLinkIds(): Unit = {
+  protected def populateIdToLinkIds(): Unit = {
     var pages: NodeSeq = xml.XML.loadFile(inputFile) \ "page"
 
     for (page <- pages) {
@@ -142,7 +134,6 @@ class Index(val inputFile: String) {
           }
         }
       }
-      pages = pages.filterNot(_ == page)
     }
   }
 
@@ -199,7 +190,7 @@ class Index(val inputFile: String) {
    * @return hashmap of page id to List of words in that page (with punctuation, whitespace removed)
    *         and links, pipe links, and metapages parsed to remove square brackets
    */
-  private def parsing(): Unit = {
+  protected def parsing(): Unit = {
     var pages: NodeSeq = xml.XML.loadFile(inputFile) \ "page"
 
     for (page <- pages) {
@@ -210,73 +201,7 @@ class Index(val inputFile: String) {
       // 2. concatenate title to body, excluding ids in pageString
       // 3. remove punctuation and whitespace, matching all words including pipe links and meta pages & convert to list
       val matchesArray: Array[String] = stemArray(regex.findAllMatchIn((page \ "title").text.trim()
-        .concat((page \ "text").text.trim())).toArray.map { aMatch => aMatch.matched }).filter(word => !isStopWord(word))
-
-      // for all words on this page
-      for (term <- matchesArray) {
-
-        // if our word is a link
-        if (term.matches(regexLink)) {
-          // case 1: pipe link
-          if (term.matches(regexPipeLink)) {
-
-            // extract word(s) to process (omit underlying link)
-            // pass word(s) to termsToIdFreq helper
-            for (linkWord <- pipeLinkHelper(term, id)) {
-              // populate termsToIdFreq map (to be stemmed and stopped)
-              termsToIdFreqHelper(linkWord, id)
-            }
-
-          } //case 2 and 3: normal link or meta page
-          else {
-            // extract word(s) to process (omit underlying link)
-            // pass word(s) to termsToIdFreq helper
-            for (linkWord <- normalLinkHelper(term, id)) {
-              // populate termsToIdFreq map (to be stemmed and stopped)
-              termsToIdFreqHelper(linkWord, id)
-            }
-          }
-        }
-        // our word is not a link
-        else {
-          // populate termsToIdFreq map (to be stemmed and stopped)
-          termsToIdFreqHelper(term, id)
-        }
-      }
-      //      pages = pages.filterNot(_ == page)
-      val removeIt = new RewriteRule {
-        override def transform(n: Node): NodeSeq = n match {
-          case e: Elem => NodeSeq.Empty
-          case n => n
-        }
-      }
-      new RuleTransformer(removeIt).transform(page)
-    }
-  }
-
-  private def termsMaxHelper(term: String, id: Int, termsToFreqThisPage: HashMap[String, Int]): Unit = {
-    // if term exists in map
-    if (termsToFreqThisPage.contains(term)) {
-      // increment frequency
-      termsToFreqThisPage(term) += 1
-    } else {
-      // add it to the map
-      termsToFreqThisPage(term) = 1
-    }
-  }
-
-  private def populateMaxCounts(): Unit = {
-    var pages: NodeSeq = xml.XML.loadFile(inputFile) \ "page"
-
-    for (page <- pages) {
-      // extract id
-      val id: Int = (page \ "id").text.trim().toInt
-      // (all steps combined in one line to save memory!)
-      // 1. get concatenation of all text in the page
-      // 2. concatenate title to body, excluding ids in pageString
-      // 3. remove punctuation and whitespace, matching all words including pipe links and meta pages & convert to list
-      val matchesArray: Array[String] = stemArray(regex.findAllMatchIn((page \ "title").text.trim()
-        .concat((page \ "text").text.trim())).toArray.map { aMatch => aMatch.matched }).filter(word => !isStopWord(word))
+        .concat(" " + (page \ "text").text.trim())).toArray.map { aMatch => aMatch.matched }).filter(word => !isStopWord(word))
 
       // hashmap to store terms to their frequency on this page (intermediate step for termsToIdFreq)
       val termsToFreqThisPage = new HashMap[String, Int]
@@ -293,7 +218,7 @@ class Index(val inputFile: String) {
             // pass word(s) to termsToIdFreq helper
             for (linkWord <- pipeLinkHelper(term, id)) {
               // populate termsToIdFreq map (to be stemmed and stopped)
-              termsMaxHelper(linkWord, id, termsToFreqThisPage)
+              termsToIdFreqHelper(linkWord, id, termsToFreqThisPage)
             }
 
           } //case 2 and 3: normal link or meta page
@@ -302,14 +227,14 @@ class Index(val inputFile: String) {
             // pass word(s) to termsToIdFreq helper
             for (linkWord <- normalLinkHelper(term, id)) {
               // populate termsToIdFreq map (to be stemmed and stopped)
-              termsMaxHelper(linkWord, id, termsToFreqThisPage)
+              termsToIdFreqHelper(linkWord, id, termsToFreqThisPage)
             }
           }
         }
         // our word is not a link
         else {
           // populate termsToIdFreq map (to be stemmed and stopped)
-          termsMaxHelper(term, id, termsToFreqThisPage)
+          termsToIdFreqHelper(term, id, termsToFreqThisPage)
         }
 
         // * populate idsToMaxCounts map (add this page)
@@ -331,15 +256,10 @@ class Index(val inputFile: String) {
         }
       }
       new RuleTransformer(removeIt).transform(page)
-      //          case e: Elem if e.text.trim().toInt == id => xml.Text("")
-      //      case e: Elem if e.text.trim().toInt == id => NodeSeq.Empty
-      //      new RuleTransformer(removeIt).transform(pages \\ "id")
-      //      page = xml.Text("")
-      //      page = (rootNode \ "page").Empty()
     }
   }
 
-  private def populateIdToTitle(): Unit = {
+  protected def populateIdToTitle(): Unit = {
     val pages: NodeSeq = xml.XML.loadFile(inputFile) \ "page"
 
     // populate idsToTitle, idsToPageRank hashmaps
@@ -354,7 +274,7 @@ class Index(val inputFile: String) {
   }
 
   //populate idToPageRank
-  private def populatePageRank(): Unit = {
+  protected def populatePageRank(): Unit = {
     val pages: NodeSeq = xml.XML.loadFile(inputFile) \ "page"
     // populate idsToTitle, idsToPageRank hashmaps
     for (page <- pages) {
@@ -367,22 +287,6 @@ class Index(val inputFile: String) {
   }
 
   // below are the implementation for calculating page rank
-
-  // General Steps:
-  // 1. create a weight matrix that store the w(j)(k) for all pages j and their links k
-  // The matrix take the form of a nested HashMap that maps id of a page to a hashmap of link ids to its weight
-  // a visual representation: (see graph in handout with the A, B, C)
-  //    A       B       C
-  // A  0       0.475   0.9
-  // B  0.475   0       0.475
-  // C  0.475   0.475   0
-  //--> HashMap {A_id, {B_id, 0.475; C_id, 0.475};
-  //             B_id, {A_id, 0.475; C_id, 0.475};
-  //             C_id, {A_id, 0.9; B_id, 0.475};
-  //            }
-  //2. Use the matrix in page rank algorithm to calculate the rank of each page after multiple iterations such that the
-  //distance between arrays in consecutive iterations are smaller than a constant
-
 
   /**
    * A method that calculates weight
@@ -437,7 +341,7 @@ class Index(val inputFile: String) {
    *
    * @return - a HashMap mapping each id to the rank score that page receives
    */
-  private def pageRank(): HashMap[Int, Double] = {
+  protected def pageRank(): Unit = {
     // initialize previous to be an array of n zeros (previous represents the array in the previous iteration)
     var previous: Array[Double] = Array.fill[Double](totalPageNum + 1)(0)
     // initialize current to be an array of n 1/n (previous represents the array in this iteration),
@@ -466,7 +370,6 @@ class Index(val inputFile: String) {
         }
       }
     }
-    idsToPageRank
   }
 
 }
@@ -497,7 +400,6 @@ object Index {
     indexer.populatePageRank()
     indexer.pageRank()
     indexer.idToLinkIds.clear()
-    indexer.populateMaxCounts()
     // generate docs.txt
     FileIO.printDocumentFile(args(2), indexer.idsToMaxCounts, indexer.idsToPageRank)
   }
