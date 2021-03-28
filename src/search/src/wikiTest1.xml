@@ -1,15 +1,15 @@
 <xml>
     <page>
-        <id>
-            0
-        </id>
-        <title>
-            title1
-        </title>
-        <text>
-            Goodness me! What a lovely drop of tea this is for thee
-            [[title2]]
-        </text>
+    <id>
+        0
+    </id>
+    <title>
+        title1
+    </title>
+    <text>
+        Good Good me! What a lovely drop of tea this is for thee
+        [[title2]]
+    </text>
     </page>
     <page>
         <id>
@@ -20,7 +20,7 @@
         </title>
         <text>
             A drop of tea for thee.
-            [[title1]]
+            [[title1]] [[title3|tea|boba]]
         </text>
     </page>
     <page>
@@ -32,7 +32,7 @@
         </title>
         <text>
             Hello I am text3. Goodness me! What a lovely day it is.
-            [[title2]]
+            [[title2]] [[Category: title4]]
         </text>
     </page>
 </xml>
