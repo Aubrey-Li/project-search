@@ -76,10 +76,13 @@ class Query(titleIndex: String, documentIndex: String, wordIndex: String,
    * @param userQuery - the query text
    */
   private def query(userQuery: String) {
+    //( We combined them to one line to reduce intermediate steps and save memory)
     // remove punctuation and whitespace, matching all words
     // convert to list (each element is a word of the query)
     // stem and remove stop words (done in one step to save memory space)
-    val stoppedStemmedQuery: Array[String] = stemArray(regex.findAllMatchIn(userQuery).toArray.map { aMatch => aMatch.matched.toLowerCase() }).filter(word => !isStopWord(word))
+    val stoppedStemmedQuery: Array[String] = stemArray(regex.findAllMatchIn(userQuery)
+      .toArray.map { aMatch => aMatch.matched.toLowerCase() })
+      .filter(word => !isStopWord(word))
 
     for (term <- stoppedStemmedQuery) {
       // if the hashmap {terms to {ids to frequencies}} contains this term

@@ -35,4 +35,36 @@
             [[title2]] [[Category: title4]]
         </text>
     </page>
+    <page>
+        <title>
+            page4
+        </title>
+        <id>
+            4
+        </id>
+        <text>
+            [[page0|page2]] rank rank rank rank rank [[title1]] [[title2]] [[title3]] [[title1]]
+        </text>
+    </page>
+    <page>
+        <title>
+            page5
+        </title>
+        <id>
+            5
+        </id>
+        <text>
+            [[dead]] some coding a day
+        </text>
+    </page>
+    <page>
+        <title>
+            page7
+        </title>
+        <id>
+            7
+        </id>
+        <text>
+        </text>
+    </page>
 </xml>
